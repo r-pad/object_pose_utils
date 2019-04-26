@@ -24,7 +24,7 @@ class OutputTypes(Enum):
     IMAGE_CROPPED = auto()
     IMAGE_MASKED_CROPPED = auto()
     # Object Types
-    OBJECT_INDEX = auto()
+    OBJECT_LABEL = auto()
     MODEL_POINTS = auto()
     # Segmentaion Types
     BBOX = auto()
@@ -128,12 +128,12 @@ class PoseImageDataset(Dataset):
                 outputs.append(self.processDepthImage(depth.copy(), meta_data, output_type))
             elif(output_type is in MODEL_POINT_OUTPUTS):
                 if('points' is not in locals()):
-                    points = self.getModelPoints(meta_data['object_index'])
+                    points = self.getModelPoints(meta_data['object_label'])
                 outputs.append(self.processModelPoints(points.copy(), meta_data, output_type))
             elif(output_type is in TRANSFORM_OUTPUTS):
                 outputs.append(self.processTransform(meta_data, output_type))
-            elif(output_type is OutputTypes.OBJECT_INDEX):
-                outputs.append(meta_data['object_index'])
+            elif(output_type is OutputTypes.OBJECT_LABEL):
+                outputs.append(meta_data['object_label'])
             elif(output_type is OutputTypes.MASK):
                 outputs.append(meta_data['mask'])
             elif(output_type is OutputTypes.BBOX):
@@ -218,12 +218,12 @@ class PoseImageDataset(Dataset):
     def getImage(self, index):
         raise NotImplementedError('getImage must be implemented by child classes')
 
-    ### Should return dictionary containing {transform_mat, object_index}
+    ### Should return dictionary containing {transform_mat, object_label}
     # Optionally containing {mask, bbox, camera_scale, camera_cx, camera_cy, camera_fx, camera_fy}
     def getMetaData(self, mask=False, bbox=False, camera_matrix=False)
         raise NotImplementedError('getModelPoints must be implemented by child classes')
     
-    def getModelPoints(self, object_index):
+    def getModelPoints(self, object_label):
         raise NotImplementedError('getModelPoints must be implemented by child classes')
     
     def __len__(self):
