@@ -219,7 +219,7 @@ class PoseImageDataset(Dataset):
         raise NotImplementedError('getImage must be implemented by child classes')
 
     ### Should return dictionary containing {transform_mat, object_index}
-    # Optionally containing {mask, bbox, camera_matrix}
+    # Optionally containing {mask, bbox, camera_scale, camera_cx, camera_cy, camera_fx, camera_fy}
     def getMetaData(self, mask=False, bbox=False, camera_matrix=False)
         raise NotImplementedError('getModelPoints must be implemented by child classes')
     
