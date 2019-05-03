@@ -86,7 +86,7 @@ CAMERA_MATRIX_OUTPUTS = set(OutputTypes.DEPTH_POINTS,
                             OutputTypes.DEPTH_POINTS_MASKED,
                             )
 
-class PoseImageDataset(Dataset):
+class PoseDataset(Dataset):
     def __init__(self, 
                  image_size,
                  output_data = [
@@ -95,7 +95,7 @@ class PoseImageDataset(Dataset):
                                ]
                  preprocessor = None,
                  *args, **kwargs):
-        super(PoseImageDataset, self).__init__()
+        super(PoseDataset, self).__init__()
         self.image_size = image_size
         self.output_types = set(output_data)
         self.preprocessor = preprocessor
@@ -111,7 +111,7 @@ class PoseImageDataset(Dataset):
         need_mask = not self.IMAGE_CONTAINS_MASK and len(output_data & MASK_OUTPUTS) > 0
         need_bbox = not self.BBOX_FROM_MASK and len(output_data & BBOX_OUTPUTS) > 0
         need_camera_matrix = len(output_data & CAMERA_MATRIX_OUTPUTS) >  0
-        meta_data = getMetaData(mask = need_mask, bbox = need_bbox, camera_matrix = need_camera_matrix)
+        meta_data = self.getMetaData(index, mask = need_mask, bbox = need_bbox, camera_matrix = need_camera_matrix)
         if(need_mask and self.IMAGE_CONTAINS_MASK):
             img = self.getImage(index)
             meta_data['mask'] = img[:,:,3]
@@ -220,7 +220,7 @@ class PoseImageDataset(Dataset):
 
     ### Should return dictionary containing {transform_mat, object_label}
     # Optionally containing {mask, bbox, camera_scale, camera_cx, camera_cy, camera_fx, camera_fy}
-    def getMetaData(self, mask=False, bbox=False, camera_matrix=False)
+    def getMetaData(self, index, mask=False, bbox=False, camera_matrix=False)
         raise NotImplementedError('getModelPoints must be implemented by child classes')
     
     def getModelPoints(self, object_label):
