@@ -10,6 +10,12 @@ import torch
 import torchvision.transforms as transforms
 from generic_pose.utils import to_np
 
+def mask2BBox(img):
+    where = np.array(np.where(img[:,:,3]))
+    x1, y1 = np.amin(where, axis=1)
+    x2, y2 = np.amax(where, axis=1)
+    return (x1, y1, x2-x1, y2-y1)
+
 def cropBBox(img, bbox, boarder_width = 10):
     rows, cols = img.shape[:2]
     x,y,w,h = bbox
