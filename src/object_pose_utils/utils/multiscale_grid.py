@@ -6,7 +6,6 @@ Created on Tue Nov 21 17:35:53 2017
 """
 
 from object_pose_utils.bbTrans.discretized4dSphere import S3Grid
-from object_pose_utils.utils.tetra_utils import vec_in_list, vec_close_in_list
 
 import numpy as np
 

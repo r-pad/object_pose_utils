@@ -7,6 +7,11 @@ Created on Tue Nov 21 17:35:53 2017
 
 import numpy as np
 from quat_math import projectedAverageQuaternion
+from object_pose_utils.utils.multiscale_grid import MultiResGrid
+import scipy
+from sklearn.neighbors import KDTree
+
+eps = 1e-12
 
 def vec_in_list(target, list_vecs):
     return next((True for elem in list_vecs if elem.size == target.size and np.array_equal(elem, target)), False)
@@ -14,97 +19,31 @@ def vec_in_list(target, list_vecs):
 def vec_close_in_list(target, list_vecs):
     return next((True for elem in list_vecs if elem.size == target.size and np.allclose(elem, target)), False)
 
-def insideTetra(tetra, p, return_all = False):
+def insideTetra(tetra, q):
     v0 = np.zeros(4)
     v1 = tetra.vertices[0]
     v2 = tetra.vertices[1]
     v3 = tetra.vertices[2]
     v4 = tetra.vertices[3]
     
-    D1 = np.linalg.det(np.stack([v2,v3,v4, v1]))
-    D2 = np.linalg.det(np.stack([v1,v3,v4, v2]))
-    D3 = np.linalg.det(np.stack([v1,v2,v4, v3]))
-    D4 = np.linalg.det(np.stack([v1,v2,v3, v4]))
-
-    P1 = np.linalg.det(np.stack([v2,v3,v4, p]))
-    P2 = np.linalg.det(np.stack([v1,v3,v4, p]))
-    P3 = np.linalg.det(np.stack([v1,v2,v4, p]))
-    P4 = np.linalg.det(np.stack([v1,v2,v3, p]))
-
-    D_signs = np.array([np.sign(D1),
-                        np.sign(D2),
-                        np.sign(D3),
-                        np.sign(D4)])
-
-    P_signs = np.array([np.sign(P1),
-                        np.sign(P2),
-                        np.sign(P3),
-                        np.sign(P4)])
-
-    inside = np.all(D_signs == P_signs)
-    if(return_all):
-        return inside, D_signs, P_signs
-    else:
-        return inside
-
-def insideTetra1(tetra, p, return_all = False):
-    v0 = np.zeros(4)
-    v1 = tetra.vertices[0]
-    v2 = tetra.vertices[1]
-    v3 = tetra.vertices[2]
-    v4 = tetra.vertices[3]
+    n1 = scipy.linalg.null_space(np.vstack([v2,v3,v4]))
+    n2 = scipy.linalg.null_space(np.vstack([v1,v3,v4]))
+    n3 = scipy.linalg.null_space(np.vstack([v1,v2,v4]))
+    n4 = scipy.linalg.null_space(np.vstack([v1,v2,v3]))
+    qs1 = q.dot(n1)
+    vs1 = v1.T.dot(n1)
+    qs2 = q.dot(n2) 
+    vs2 = v2.T.dot(n2) 
+    qs3 = q.dot(n3) 
+    vs3 = v3.T.dot(n3)
+    qs4 = q.dot(n4)
+    vs4 = v4.T.dot(n4)
     
-    #D0 = np.stack([v0,v1,v2,v3,v4])
-    D1 = np.linalg.det(np.hstack([np.stack([v0,v1,v2,v3, p]), np.ones([5,1])]))
-    D2 = np.linalg.det(np.hstack([np.stack([v0,v1,v2, p,v4]), np.ones([5,1])]))
-    D3 = np.linalg.det(np.hstack([np.stack([v0,v1, p,v3,v4]), np.ones([5,1])]))
-    D4 = np.linalg.det(np.hstack([np.stack([v0, p,v2,v3,v4]), np.ones([5,1])]))
+    if (vs1*qs1 >= -eps and vs2*qs2 >= -eps and vs3*qs3 >= -eps and vs4*qs4 >= -eps) or \
+       (vs1*qs1 <=  eps and vs2*qs2 <=  eps and vs3*qs3 <=  eps and vs4*qs4 <=  eps):
+        return True
 
-    signs = np.array([np.sign(D1),
-                      np.sign(D2),
-                      np.sign(D3),
-                      np.sign(D4)])
-    inside = np.all(signs == signs[0])
-    if(return_all):
-        return inside, signs
-    else:
-        return inside
-
-def insideTetra2(tetra, p, return_all = False):
-    # From this post
-    # http://steve.hollasch.net/cgindex/geometry/ptintet.html
-    v0 = np.zeros(4)
-    v1 = tetra.vertices[0]
-    v2 = tetra.vertices[1]
-    v3 = tetra.vertices[2]
-    v4 = tetra.vertices[3]
-    
-    D1 = np.linalg.det(np.hstack([np.stack([v0,v2,v3,v4, v1]), np.ones([5,1])]))
-    D2 = np.linalg.det(np.hstack([np.stack([v0,v1,v3,v4, v2]), np.ones([5,1])]))
-    D3 = np.linalg.det(np.hstack([np.stack([v0,v1,v2,v4, v3]), np.ones([5,1])]))
-    D4 = np.linalg.det(np.hstack([np.stack([v0,v1,v2,v3, v4]), np.ones([5,1])]))
-    
-    P1 = np.linalg.det(np.hstack([np.stack([v0,v2,v3,v4, p]), np.ones([5,1])]))
-    P2 = np.linalg.det(np.hstack([np.stack([v0,v1,v3,v4, p]), np.ones([5,1])]))
-    P3 = np.linalg.det(np.hstack([np.stack([v0,v1,v2,v4, p]), np.ones([5,1])]))
-    P4 = np.linalg.det(np.hstack([np.stack([v0,v1,v2,v3, p]), np.ones([5,1])]))
-
-    D_signs = np.array([np.sign(D1),
-                        np.sign(D2),
-                        np.sign(D3),
-                        np.sign(D4)])
-
-    P_signs = np.array([np.sign(P1),
-                        np.sign(P2),
-                        np.sign(P3),
-                        np.sign(P4)])
-
-    inside = np.all(D_signs == P_signs)
-    if(return_all):
-        return inside, D_signs, P_signs
-    else:
-        return inside
-
+    return False
 
 def metricGreaterThan(sorted_vals, max_metrics, metric_func):
     for k in range(len(sorted_vals)):
@@ -115,33 +54,54 @@ def metricGreaterThan(sorted_vals, max_metrics, metric_func):
             return False
     return False
 
+def quatL2Dist(q1, q2):
+    return min(np.linalg.norm(q1-q2),np.linalg.norm(q1+q2))
 
-def topTetrahedron(dists, tetras, metric_func=np.mean):
-    max_vert_idx = np.argwhere(dists == np.amax(dists)).flatten()
-    tetra_mask = np.bitwise_or.reduce(np.isin(tetras, max_vert_idx), axis=1)
-    tetra_idxs = np.nonzero(tetra_mask)[0]
-    max_tetra_idx = -1
-    max_val = -float('inf')
-    max_metrics = [-float('inf') for _ in range(4)]
-    for j, indices in zip(tetra_idxs, tetras[tetra_mask]):
-        vals = []
-        for idx in indices:
-            vals.append(dists[idx])
-    #for j in tetra_idxs:
-    #    vals = []
-    #    for idx in tetras[j]:
-    #        vals.append(dists[idx])
-        vals = sorted(vals, reverse=True)
-    #    if(np.average(vals) > max_val):
-    #        max_val = np.average(vals)
-        if(metricGreaterThan(vals, max_metrics, metric_func)):
-            max_metrics = [metric_func(vals[k:]) for k in range(4)]
-            max_tetra_idx = j
-            
-    return max_tetra_idx
+class SearchableTetraGrid(object):
+    def __init__(self, grid_level):
+        #self.vertices = vertices
+        self.level = grid_level
+        self.grid = MultiResGrid(self.level) 
+        self.num_verts = self.grid.vertices.shape[0]
+        self.num_tetra = len(self.grid.GetTetras(1))
+        self.kd_tree = KDTree(np.vstack([self.grid.vertices, -self.grid.vertices]))
+        
+        self.max_edge = -np.inf
+        for j, tet in enumerate(self.grid.GetTetrahedra(self.level)):
+            v1 = tet.vertices[0]
+            v2 = tet.vertices[1]
+            v3 = tet.vertices[2]
+            v4 = tet.vertices[3]
+            d12 = quatL2Dist(v1,v2)
+            d13 = quatL2Dist(v1,v3)
+            d14 = quatL2Dist(v1,v4)
+            d23 = quatL2Dist(v2,v3)
+            d24 = quatL2Dist(v2,v4)
+            d34 = quatL2Dist(v3,v4)
+            self.max_edge = max(self.max_edge, d12, d13, d14, d23, d24, d34)
+
+    def containingTetra(self, q, return_all=False):
+        vert_ids = self.kd_tree.query_radius([q], r = self.max_edge)[0]
+        vert_ids = np.where(vert_ids < self.num_verts, vert_ids, vert_ids - self.num_verts)
+        tetra_ids = set()
+
+        for v_id in vert_ids:
+            _, t_ids = self.grid.GetNeighborhood(v_id, level=self.level)
+            tetra_ids.update(t_ids)
+
+        if(return_all):
+            ids = []
+        for t_id in tetra_ids:
+            if(insideTetra(self.grid.GetTetrahedron(t_id, level=self.level), q)):
+                if(return_all):
+                    ids.append(t_id)
+                else:
+                    return t_id
+        if(not return_all):
+            raise ValueError('Did not find containing tetrahedra for {}'.format(q)) 
+        return ids
 
 def refineTetrahedron(q, tetrahedron, dist_func, metric_func, levels=2):
-    #print(levels, insideTetra2(tetrahedron, q) or insideTetra2(tetrahedron, -q))
     if(levels == 0):
         dists = dist_func(tetrahedron.vertices)
         idx = np.argmax(dists)
@@ -156,12 +116,9 @@ def refineTetrahedron(q, tetrahedron, dist_func, metric_func, levels=2):
     for j, tra in enumerate(tetras):
         dists = dist_func(tra.vertices)
         val = metric_func(dists)
-        #print(j, val, insideTetra2(tra, q) or insideTetra2(tra, -q))
-        #print(dists)
         if(val > max_val):
             max_val = val
             max_idx = j
-    #print(max_idx, max_val)
     return refineTetrahedron(q, tetras[max_idx], dist_func, metric_func, levels=levels-1)
 
 
