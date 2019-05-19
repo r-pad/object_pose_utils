@@ -4,7 +4,7 @@ import torch
 
 dataset_linemod = LinemodDataset("/home/mengyunx/DenseFusion/datasets/linemod/Linemod_preprocessed",
                                     "test",
-                                    [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21])
+                                    [1,2,4,5,6,8,9,10,11,12,13,14,15])
 dataloader_linemod = torch.utils.data.DataLoader(dataset_linemod, batch_size=1, shuffle=False, num_workers=10)
 
 for i, data in enumerate(dataloader_linemod, 0):
