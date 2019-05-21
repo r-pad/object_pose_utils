@@ -19,10 +19,10 @@ def mask2BBox(img):
 def cropBBox(img, bbox, boarder_width = 10):
     rows, cols = img.shape[:2]
     x,y,w,h = bbox
-    y0 = min(max(y - boarder_width, 0), rows)
-    x0 = min(max(x - boarder_width, 0), cols)
-    y1 = min(max(y + h + boarder_width, 0), rows)
-    x1 = min(max(x + w + boarder_width, 0), cols)
+    y0 = int(min(max(y - boarder_width, 0), rows))
+    x0 = int(min(max(x - boarder_width, 0), cols))
+    y1 = int(min(max(y + h + boarder_width, 0), rows))
+    x1 = int(min(max(x + w + boarder_width, 0), cols))
     img_crop = img[y0:y1,x0:x1]
 
     return img_crop, (x0, y0)
