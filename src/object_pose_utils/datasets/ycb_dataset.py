@@ -9,7 +9,8 @@ import os
 import torchvision.transforms as transforms
 norm = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
 
-from object_pose_utils.datasets.pose_dataset import IMAGE_OUTPUTS 
+from object_pose_utils.datasets.pose_dataset import IMAGE_OUTPUTS, PoseDataError
+
 def YcbImagePreprocessor(outputs, meta_data, output_types):
     res = []
     for x, ot in zip(outputs, output_types):
@@ -19,7 +20,9 @@ def YcbImagePreprocessor(outputs, meta_data, output_types):
     return res
 
 class YcbDataset(PoseDataset):
-    def __init__(self, dataset_root, mode, object_list, *args, **kwargs):
+    def __init__(self, dataset_root, mode, object_list, 
+                 use_label_bbox = True, grid_size = 3885, 
+                 *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.mode = mode
         self.dataset_root = dataset_root
@@ -31,9 +34,10 @@ class YcbDataset(PoseDataset):
         self.pt = {}
         self.num_pt_mesh_small = 500
         self.num_pt_mesh_large = 2600
-        self.minimum_num_pt = -1#50
+        self.minimum_num_pts = 50
         self.list_rank = []
         self.index_to_object_name = {} #{2:002_master_chef_can, 3:...}
+        self.use_label_bbox = use_label_bbox
         self.classes = ['__background__']
 
         self.cam_cx_1 = 312.9869
@@ -58,10 +62,9 @@ class YcbDataset(PoseDataset):
 
         # Collect corresponding images
         # image_list will contain (0086/000867, object num), (0086/000868, object num) ...
-        if mode == 'train':
+        if 'train' in mode:
             for item in object_list:
-                path = '{0}/image_sets/{1}_train_split.txt'.format(self.dataset_root,
-                                                                                          self.classes[item])
+                path = '{0}/image_sets/{1}_train_split.txt'.format(self.dataset_root, self.classes[item])
                 image_file = open(path)
                 while 1:
                     image_line = image_file.readline()
@@ -74,7 +77,44 @@ class YcbDataset(PoseDataset):
 
                 image_file.close()
 
-        elif mode == 'test':
+        if 'syn' in mode:
+            for item in object_list:
+                path = '{0}/image_sets/{1}_syn.txt'.format(self.dataset_root, self.classes[item])
+                image_file = open(path)
+                while 1:
+                    image_line = image_file.readline()
+                    if not image_line:
+                        break
+                    if image_line[-1] == '\n':
+                        image_line = image_line[:-1]
+                    self.image_list.append((image_line, item))
+                    self.list_obj.append(item)
+                image_file.close()
+        
+        if 'grid' in mode:
+            num_digits = len(str(grid_size))
+            for item in object_list:
+                for j in range(grid_size):
+                    image_line = '../depth_renders/{1}/{2:0{0}d}'.format(num_digits, self.classes[item], j)
+                    self.image_list.append((image_line, item))
+                    self.list_obj.append(item)
+
+        if 'valid' in mode:
+            for item in object_list:
+                path = '{0}/image_sets/{1}_valid_split.txt'.format(self.dataset_root, self.classes[item])
+                image_file = open(path)
+                while 1:
+                    image_line = image_file.readline()
+                    if not image_line:
+                        break
+                    if image_line[-1] == '\n':
+                        image_line = image_line[:-1]
+                    self.image_list.append((image_line, item))
+                    self.list_obj.append(item)
+
+                image_file.close()                               
+
+        if mode == 'test':
             for item in object_list:
                 path = '{0}/image_sets/{1}_keyframe.txt'.format(self.dataset_root,
                                                                                      self.classes[item])
@@ -90,18 +130,20 @@ class YcbDataset(PoseDataset):
 
                 image_file.close()
 
+    def getPath(self, index):
+        return self.image_list[index][0]
 
     def getDepthImage(self, index):
-        sub_path = self.image_list[index][0]
+        sub_path = self.getPath(index)
         path = '{0}/data/{1}-depth.png'.format(self.dataset_root, sub_path)
         image = np.array(Image.open(path))
         return image
 
     def getImage(self, index):
-        sub_path = self.image_list[index][0]
+        sub_path = self.getPath(index)
         path = '{0}/data/{1}-color.png'.format(self.dataset_root, sub_path)
         image = np.array(Image.open(path))
-        return image
+        return image[:,:,:3]
 
     ### Should return dictionary containing {transform_mat, object_label}
     # Optionally containing {mask, bbox, camera_scale, camera_cx, camera_cy, camera_fx, camera_fy}
@@ -114,7 +156,6 @@ class YcbDataset(PoseDataset):
         sub_path = self.image_list[index][0]
         path = '{0}/data/{1}-meta.mat'.format(self.dataset_root, sub_path)
         meta = scio.loadmat(path)
-        posecnn_meta = scio.loadmat('{0}/data/{1}-posecnn.mat'.format(self.dataset_root, sub_path))
 
         pose_idx = np.where(meta['cls_indexes'].flatten()==object_label)[0][0]
         target_r = meta['poses'][:, :, pose_idx][:, 0:3]
@@ -125,7 +166,7 @@ class YcbDataset(PoseDataset):
         transform_mat[:3, 3] = target_t
 
         returned_dict['transform_mat'] = transform_mat
-        if mask:
+        if mask or (bbox and self.use_label_bbox):
             obj = meta['cls_indexes'].flatten().astype(np.int32)
             depth = self.getDepthImage(index)
             sub_path = self.image_list[index][0]
@@ -137,19 +178,28 @@ class YcbDataset(PoseDataset):
             mask = mask_label * mask_depth
 
             #TODO: figure out how to handle when the valid labels are smaller than minimum size required
-            #if len(mask.nonzero()[0]) <= self.minimum_num_pt:
-                #print("nonzero in mask is only {0}".format(len(mask.nonzero()[0])))
+            if len(mask.nonzero()[0]) <= self.minimum_num_pts:
+                
+                raise PoseDataError('Mask {} has less than minimum number of pixels ({} < {})'.format(
+                    sub_path, len(mask.nonzero()[0]), self.minimum_num_pts))
                 #while 1:
                     #pass
             returned_dict['mask'] = mask
         if bbox:  # needs to return x,y,w,h
-            obj_idx = np.nonzero(posecnn_meta['rois'][:,1].astype(int) == object_label)[0][0]
-            rois = np.array(posecnn_meta['rois'])
-            rmin, rmax, cmin, cmax = self.get_bbox(rois[obj_idx])
+            if(self.use_label_bbox or syn_data):
+                rmin, rmax, cmin, cmax = self.get_bbox_label(mask_label)
+            else:
+                posecnn_meta = scio.loadmat('{0}/data/{1}-posecnn.mat'.format(self.dataset_root, sub_path))
+                obj_idx = np.nonzero(posecnn_meta['rois'][:,1].astype(int) == object_label)[0]
+                if(len(obj_idx) == 0):
+                    raise PoseDataError('Object {} not in PoseCNN ROIs {}'.format(object_label, sub_path))
+                obj_idx = obj_idx[0]
+                rois = np.array(posecnn_meta['rois'])
+                rmin, rmax, cmin, cmax = self.get_bbox(rois[obj_idx])
             returned_dict['bbox'] = (cmin, rmin, cmax-cmin, rmax-rmin)
 
         if camera_matrix:
-            if self.image_list[index][0][:8] != 'data_syn' and int(self.image_list[index][0][5:9]) >= 60:
+            if self.image_list[index][0][:3] != '../' and int(self.image_list[index][0][5:9]) >= 60:
                 cam_cx = self.cam_cx_2
                 cam_cy = self.cam_cy_2
                 cam_fx = self.cam_fx_2

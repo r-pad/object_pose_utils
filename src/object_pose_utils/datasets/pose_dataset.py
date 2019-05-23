@@ -16,6 +16,10 @@ from object_pose_utils.utils.image_preprocessing import cropBBox, transparentOve
 from quat_math import quaternion_from_matrix
 
 from enum import Enum
+
+class PoseDataError(Exception):
+    pass
+
 class OutputTypes(Enum):
     # Image Types
     IMAGE = 1
@@ -110,6 +114,7 @@ class PoseDataset(Dataset):
                                ],
                  preprocessor = None,
                  num_points = -1,
+                 resample_on_error = False,
                  *args, **kwargs):
         super(PoseDataset, self).__init__()
         self.image_size = image_size
@@ -129,41 +134,49 @@ class PoseDataset(Dataset):
         self.IMAGE_CONTAINS_MASK = False
         self.BBOX_FROM_MASK = False
         self.num_points = num_points
+        self.resample_on_error = resample_on_error
 
     def __getitem__(self, index):
         outputs = [] 
         need_mask = not self.IMAGE_CONTAINS_MASK and len(self.output_types & MASK_OUTPUTS) > 0
         need_bbox = not self.BBOX_FROM_MASK and len(self.output_types & BBOX_OUTPUTS) > 0
         need_camera_matrix = len(self.output_types & CAMERA_MATRIX_OUTPUTS) >  0
-        meta_data = self.getMetaData(index, mask = need_mask, bbox = need_bbox, camera_matrix = need_camera_matrix)
-
-        if(need_mask and self.IMAGE_CONTAINS_MASK):
-            img = self.getImage(index)
-            meta_data['mask'] = img[:,:,3]
-        # Could build a output function at init to speed this up if its slow.
-        for output_type in self.output_data:
-            if(output_type in IMAGE_OUTPUTS):
-                if('img' not in locals()):
-                    img = self.getImage(index)
-                outputs.append(self.processImage(img.copy(), meta_data, output_type))
-            elif(output_type in DEPTH_OUTPUTS):
-                if('depth' not in locals()):
-                    depth = self.getDepthImage(index)
-                outputs.extend(self.processDepthImage(depth.copy(), meta_data, output_type))
-            elif(output_type in MODEL_POINT_OUTPUTS):
-                if('points' not in locals()):
-                    points = self.getModelPoints(meta_data['object_label'])
-                outputs.append(self.processModelPoints(points.copy(), meta_data, output_type))
-            elif(output_type in TRANSFORM_OUTPUTS):
-                outputs.append(self.processTransform(meta_data, output_type))
-            elif(output_type is OutputTypes.OBJECT_LABEL):
-                outputs.append(torch.LongTensor(meta_data['object_label']))
-            elif(output_type is OutputTypes.MASK):
-                outputs.append(torch.LongTensor(meta_data['mask']))
-            elif(output_type is OutputTypes.BBOX):
-                outputs.append(torch.LongTensor(meta_data['bbox']))
+        try:
+            meta_data = self.getMetaData(index, mask = need_mask, bbox = need_bbox, camera_matrix = need_camera_matrix)
+            if(need_mask and self.IMAGE_CONTAINS_MASK):
+                img = self.getImage(index)
+                meta_data['mask'] = img[:,:,3]
+            # Could build a output function at init to speed this up if its slow.
+            for output_type in self.output_data:
+                if(output_type in IMAGE_OUTPUTS):
+                    if('img' not in locals()):
+                        img = self.getImage(index)
+                    outputs.append(self.processImage(img.copy(), meta_data, output_type))
+                elif(output_type in DEPTH_OUTPUTS):
+                    if('depth' not in locals()):
+                        depth = self.getDepthImage(index)
+                    outputs.extend(self.processDepthImage(depth.copy(), meta_data, output_type))
+                elif(output_type in MODEL_POINT_OUTPUTS):
+                    if('points' not in locals()):
+                        points = self.getModelPoints(meta_data['object_label'])
+                    outputs.append(self.processModelPoints(points.copy(), meta_data, output_type))
+                elif(output_type in TRANSFORM_OUTPUTS):
+                    outputs.append(self.processTransform(meta_data, output_type))
+                elif(output_type is OutputTypes.OBJECT_LABEL):
+                    outputs.append(torch.LongTensor([meta_data['object_label']]))
+                elif(output_type is OutputTypes.MASK):
+                    outputs.append(torch.LongTensor(meta_data['mask']))
+                elif(output_type is OutputTypes.BBOX):
+                    outputs.append(torch.LongTensor(meta_data['bbox']))
+                else:
+                    raise ValueError('Invalid Output Type {}'.format(output_type))
+        except PoseDataError as e:
+            print('Exception on index {}: {}'.format(index, e))
+            if(self.resample_on_error):
+                return self.__getitem__(np.random.randint(0, len(self)))
             else:
-                raise ValueError('Invalid Output Type {}'.format(output_type))
+                return [[] for _ in self.output_data_buffered]
+
         if(self.preprocessor is not None):
             outputs = self.preprocessor(outputs, meta_data, self.output_data_buffered)
             
@@ -201,7 +214,7 @@ class PoseDataset(Dataset):
             elif len(choose) > 0:
                 choose = np.pad(choose, (0, self.num_points - len(choose)), 'wrap')
             else:
-                return None
+                raise PoseDataError('No points in mask')
             
             depth_choose = depth.flatten()[choose][:, np.newaxis].astype(np.float32)
             xmap_choose = xmap.flatten()[choose][:, np.newaxis].astype(np.float32)
