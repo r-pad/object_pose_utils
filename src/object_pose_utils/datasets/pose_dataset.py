@@ -231,7 +231,7 @@ class PoseDataset(Dataset):
                     if('img' not in locals()):
                         img = self.getImage(index)
                     outputs.append(processImage(img.copy(), meta_data, output_type,
-                                                remove_mask = self.remove_mask,
+                                                remove_mask = self.REMOVE_MASK,
                                                 background_fill = self.background_fill,
                                                 boarder_width = self.boarder_width))
                 elif(output_type in DEPTH_OUTPUTS):
