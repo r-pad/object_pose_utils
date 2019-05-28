@@ -208,7 +208,7 @@ class PoseDataset(Dataset):
         
         self.preprocessor = preprocessor
         self.REMOVE_MASK = True
-        self.backgroud_fill = 255.0
+        self.background_fill = 255.0
         self.boarder_width = 0.0
         self.IMAGE_CONTAINS_MASK = False
         self.BBOX_FROM_MASK = False
