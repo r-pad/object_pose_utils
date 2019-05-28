@@ -113,7 +113,7 @@ def processImage(img, meta_data, output_type,
                  ):
     if(output_type in MASK_OUTPUTS):
         img = np.concatenate([img, meta_data['mask']], axis=2)
-        if(self.background_fill is not None):
+        if(background_fill is not None):
             image = transparentOverlay(img, background_fill, remove_mask=remove_mask)
     if(output_type in BBOX_OUTPUTS):
         img, _ = cropBBox(img, meta_data['bbox'], boarder_width)
@@ -139,7 +139,7 @@ def processDepthImage(depth, meta_data, output_type,
         choose = depth.flatten().nonzero()[0]
         if len(choose) > num_points:
             c_mask = np.zeros(len(choose), dtype=int)
-            c_mask[:self.num_points] = 1
+            c_mask[:num_points] = 1
             np.random.shuffle(c_mask)
             choose = choose[c_mask.nonzero()]
         elif len(choose) > 0:
