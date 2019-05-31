@@ -114,7 +114,7 @@ def processImage(img, meta_data, output_type,
                  boarder_width = 0.0,
                  ):
     if(output_type in MASK_OUTPUTS):
-        img = np.concatenate([img, meta_data['mask']], axis=2)
+        img = np.concatenate([img, np.expand_dims(meta_data['mask'], axis=2)], axis=2)
         if(background_fill is not None):
             image = transparentOverlay(img, background_fill, remove_mask=remove_mask)
     if(output_type in BBOX_OUTPUTS):
