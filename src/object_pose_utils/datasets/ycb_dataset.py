@@ -1,3 +1,10 @@
+# -*- coding: utf-8 -*-
+"""
+Created on a Thursday long long ago
+
+@author: bokorn
+"""
+
 from .pose_dataset import PoseDataset
 import numpy as np
 import random
@@ -6,18 +13,8 @@ from PIL import Image
 import scipy.io as scio
 import os
 
-import torchvision.transforms as transforms
-norm = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-
-from object_pose_utils.datasets.pose_dataset import IMAGE_OUTPUTS, PoseDataError
-
-def YcbImagePreprocessor(outputs, meta_data, output_types):
-    res = []
-    for x, ot in zip(outputs, output_types):
-        if(ot in IMAGE_OUTPUTS):
-            x = norm(x)
-        res.append(x)
-    return res
+from object_pose_utils.datasets.pose_dataset import PoseDataError
+from object_pose_utils.datasets.image_processing import get_bbox_label
 
 class YcbDataset(PoseDataset):
     def __init__(self, dataset_root, mode, object_list, 
@@ -187,7 +184,7 @@ class YcbDataset(PoseDataset):
             returned_dict['mask'] = mask
         if bbox:  # needs to return x,y,w,h
             if(self.use_label_bbox or syn_data):
-                rmin, rmax, cmin, cmax = self.get_bbox_label(mask_label)
+                bbox = get_bbox_label(mask_label, image_size = self.image_size)
             else:
                 posecnn_meta = scio.loadmat('{0}/data/{1}-posecnn.mat'.format(self.dataset_root, sub_path))
                 obj_idx = np.nonzero(posecnn_meta['rois'][:,1].astype(int) == object_label)[0]
@@ -195,8 +192,8 @@ class YcbDataset(PoseDataset):
                     raise PoseDataError('Object {} not in PoseCNN ROIs {}'.format(object_label, sub_path))
                 obj_idx = obj_idx[0]
                 rois = np.array(posecnn_meta['rois'])
-                rmin, rmax, cmin, cmax = self.get_bbox(rois[obj_idx])
-            returned_dict['bbox'] = (cmin, rmin, cmax-cmin, rmax-rmin)
+                bbox = self.get_bbox(rois[obj_idx])
+            returned_dict['bbox'] = bbox 
 
         if camera_matrix:
             if self.image_list[index][0][:3] != '../' and int(self.image_list[index][0][5:9]) >= 60:
@@ -287,53 +284,9 @@ class YcbDataset(PoseDataset):
             delt = cmax - img_length
             cmax = img_length
             cmin -= delt
-        return rmin, rmax, cmin, cmax
+        return cmin, rmin, cmax-cmin, rmax-rmin
 
-    def get_bbox_label(self,label):
-        border_list = [-1, 40, 80, 120, 160, 200, 240, 280, 320, 360, 400, 440, 480, 520, 560, 600, 640, 680]
-        img_width = self.image_size[1]
-        img_length = self.image_size[0]
-        rows = np.any(label, axis=1)
-        cols = np.any(label, axis=0)
-        rmin, rmax = np.where(rows)[0][[0, -1]]
-        cmin, cmax = np.where(cols)[0][[0, -1]]
-        rmax += 1
-        cmax += 1
-        r_b = rmax - rmin
-        for tt in range(len(border_list)):
-            if r_b > border_list[tt] and r_b < border_list[tt + 1]:
-                r_b = border_list[tt + 1]
-                break
-        c_b = cmax - cmin
-        for tt in range(len(border_list)):
-            if c_b > border_list[tt] and c_b < border_list[tt + 1]:
-                c_b = border_list[tt + 1]
-                break
-        center = [int((rmin + rmax) / 2), int((cmin + cmax) / 2)]
-        rmin = center[0] - int(r_b / 2)
-        rmax = center[0] + int(r_b / 2)
-        cmin = center[1] - int(c_b / 2)
-        cmax = center[1] + int(c_b / 2)
-        if rmin < 0:
-            delt = -rmin
-            rmin = 0
-            rmax += delt
-        if cmin < 0:
-            delt = -cmin
-            cmin = 0
-            cmax += delt
-        if rmax > img_width:
-            delt = rmax - img_width
-            rmax = img_width
-            rmin -= delt
-        if cmax > img_length:
-            delt = cmax - img_length
-            cmax = img_length
-            cmin -= delt
-            
-        return rmin, rmax, cmin, cmax
-
-   
+  
                  
 """
 Created on Tue April 29 2019

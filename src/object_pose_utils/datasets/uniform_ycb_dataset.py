@@ -14,6 +14,7 @@ import pickle
 from object_pose_utils.datasets.pose_dataset import PoseDataError
 
 from object_pose_utils.datasets.ycb_dataset import YcbDataset as YCBDataset
+from object_pose_utils.datasets.ycb_dataset import get_bbox_label
 
 class UniformYCBDataset(YCBDataset):
     def __init__(self, dataset_root, object_label, use_label_bbox = True, *args, **kwargs):
@@ -99,7 +100,7 @@ class UniformYCBDataset(YCBDataset):
             returned_dict['mask'] = mask
         if bbox:  # needs to return x,y,w,h
             if(self.use_label_bbox or syn_data):
-                rmin, rmax, cmin, cmax = self.get_bbox_label(mask_label)
+                rmin, rmax, cmin, cmax = get_bbox_label(mask_label, image_size = self.image_size)
             else:
                 posecnn_meta = scio.loadmat('{0}/{1}-posecnn.mat'.format(self.dataset_root, sub_path))
                 obj_idx = np.nonzero(posecnn_meta['rois'][:,1].astype(int) == self.object_label)[0]

@@ -55,20 +55,18 @@ IMAGE_OUTPUTS = set([OutputTypes.IMAGE,
                     )
 DEPTH_OUTPUTS = set([OutputTypes.DEPTH_IMAGE,
                     OutputTypes.DEPTH_IMAGE_MASKED, 
-                    OutputTypes.DEPTH_IMAGE_MASKED, 
-                    OutputTypes.DEPTH_IMAGE_MASKED, 
-                    OutputTypes.DEPTH_IMAGE_MASKED, 
-                    OutputTypes.DEPTH_IMAGE_MASKED,
+                    OutputTypes.DEPTH_IMAGE_CROPPED,
+                    OutputTypes.DEPTH_IMAGE_MASKED_CROPPED,
                     OutputTypes.DEPTH_POINTS,
                     OutputTypes.DEPTH_POINTS_MASKED,
                     OutputTypes.DEPTH_POINTS_AND_INDEXES,
                     OutputTypes.DEPTH_POINTS_MASKED_AND_INDEXES]
                     )
-TRANSFORM_OUTPUTS = set([OutputTypes.TRANSFORM_MATRIX,
-                        OutputTypes.ROTATION_MATRIX,
-                        OutputTypes.QUATERNION,
-                        OutputTypes.TRANSLATION]
-                        )
+DEPTH_IMAGE_OUTPUTS = set([OutputTypes.DEPTH_IMAGE,
+                           OutputTypes.DEPTH_IMAGE_MASKED, 
+                           OutputTypes.DEPTH_IMAGE_CROPPED,
+                           OutputTypes.DEPTH_IMAGE_MASKED_CROPPED]
+                           )
 DEPTH_POINT_OUTPUTS = set([OutputTypes.DEPTH_POINTS,
                           OutputTypes.DEPTH_POINTS_MASKED,
                           OutputTypes.DEPTH_POINTS_AND_INDEXES,
@@ -80,7 +78,11 @@ POINT_INDEX_OUTPUTS = set([OutputTypes.DEPTH_POINTS_AND_INDEXES,
 MODEL_POINT_OUTPUTS = set([OutputTypes.MODEL_POINTS,
                           OutputTypes.MODEL_POINTS_TRANSFORMED]
                           )
-
+TRANSFORM_OUTPUTS = set([OutputTypes.TRANSFORM_MATRIX,
+                        OutputTypes.ROTATION_MATRIX,
+                        OutputTypes.QUATERNION,
+                        OutputTypes.TRANSLATION]
+                        )
 MASK_OUTPUTS = set([OutputTypes.MASK, 
                    OutputTypes.IMAGE_MASKED, 
                    OutputTypes.IMAGE_MASKED_CROPPED, 
@@ -160,9 +162,11 @@ def processDepthImage(depth, meta_data, output_type,
         if(output_type in POINT_INDEX_OUTPUTS):
             return [cloud, torch.LongTensor(choose.astype(np.int32))]
         else:
-            return cloud
-    
-    return torch.from_numpy(depth.astype(np.float32))
+            return [cloud]
+    if(ma.is_masked(depth)):
+        depth = depth.filled(0)
+
+    return [torch.from_numpy(depth.astype(np.float32))]
 
 def processModelPoints(points, meta_data, output_type):
     if(output_type is OutputTypes.MODEL_POINTS_TRANSFORMED):
@@ -190,7 +194,8 @@ class PoseDataset(Dataset):
                                 OutputTypes.IMAGE_CROPPED,
                                 #OutputTypes.QUATERNION,
                                ],
-                 preprocessor = None,
+                 preprocessors = [],
+                 postprocessors = [],
                  image_size = [640, 480],
                  num_points = -1,
                  resample_on_error = False,
@@ -206,7 +211,8 @@ class PoseDataset(Dataset):
             if(ot in POINT_INDEX_OUTPUTS):
                 self.output_data_buffered.append(None)
         
-        self.preprocessor = preprocessor
+        self.preprocessors = preprocessors
+        self.postprocessors = postprocessors
         self.REMOVE_MASK = True
         self.background_fill = 255.0
         self.boarder_width = 0.0
@@ -222,27 +228,36 @@ class PoseDataset(Dataset):
         need_camera_matrix = len(self.output_types & CAMERA_MATRIX_OUTPUTS) >  0
         try:
             meta_data = self.getMetaData(index, mask = need_mask, bbox = need_bbox, camera_matrix = need_camera_matrix)
-            if(need_mask and self.IMAGE_CONTAINS_MASK):
+            if(len(self.output_types & IMAGE_OUTPUTS) > 0 or (need_mask and self.IMAGE_CONTAINS_MASK)):
                 img = self.getImage(index)
+            else:
+                img = None
+            if(len(self.output_types & DEPTH_OUTPUTS) > 0):
+                depth = self.getDepthImage(index)
+            else:
+                depth = None
+            if(len(self.output_types & MODEL_POINT_OUTPUTS) > 0):
+                points = self.getModelPoints(meta_data['object_label'])
+            else:
+                points = None
+
+            for preproc in self.preprocessors:
+                meta_data, img, depth, points = preproc(meta_data, img, depth, points)
+
+            if(need_mask and self.IMAGE_CONTAINS_MASK):
                 meta_data['mask'] = img[:,:,3]
             # Could build a output function at init to speed this up if its slow.
             for output_type in self.output_data:
                 if(output_type in IMAGE_OUTPUTS):
-                    if('img' not in locals()):
-                        img = self.getImage(index)
                     outputs.append(processImage(img.copy(), meta_data, output_type,
                                                 remove_mask = self.REMOVE_MASK,
                                                 background_fill = self.background_fill,
                                                 boarder_width = self.boarder_width))
                 elif(output_type in DEPTH_OUTPUTS):
-                    if('depth' not in locals()):
-                        depth = self.getDepthImage(index)
                     outputs.extend(processDepthImage(depth.copy(), meta_data, output_type,
                                                      num_points = self.num_points,
                                                      boarder_width = self.boarder_width))
                 elif(output_type in MODEL_POINT_OUTPUTS):
-                    if('points' not in locals()):
-                        points = self.getModelPoints(meta_data['object_label'])
                     outputs.append(processModelPoints(points.copy(), meta_data, output_type))
                 elif(output_type in TRANSFORM_OUTPUTS):
                     outputs.append(processTransform(meta_data, output_type))
@@ -261,8 +276,8 @@ class PoseDataset(Dataset):
             else:
                 return [[] for _ in self.output_data_buffered]
 
-        if(self.preprocessor is not None):
-            outputs = self.preprocessor(outputs, meta_data, self.output_data_buffered)
+        for postproc in self.postprocessors:
+            outputs = postproc(outputs, meta_data, self.output_data_buffered)
             
         return tuple(outputs)
     def getDepthImage(self, index):
