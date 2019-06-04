@@ -7,18 +7,28 @@ Created on a Thursday long long ago
 
 import numpy as np
 import torchvision.transforms as transforms
+from PIL import Image
 from object_pose_utils.datasets.pose_dataset import IMAGE_OUTPUTS
 
 
 norm = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
 
-def ImageNormalizer(outputs, meta_data, output_types):
-    res = []
-    for x, ot in zip(outputs, output_types):
-        if(ot in IMAGE_OUTPUTS):
-            x = norm(x)
-        res.append(x)
-    return res
+class ImageNormalizer(object):
+    def __call__(self, outputs, meta_data, output_types):
+        res = []
+        for x, ot in zip(outputs, output_types):
+            if(ot in IMAGE_OUTPUTS):
+                x = norm(x)
+            res.append(x)
+        return res
+
+class ColorJitter(object):
+    def __init__(self, brightness = 0.2, contrast = 0.2, saturation = 0.2, hue = 0.05):
+        self.trancolor = transforms.ColorJitter(brightness, contrast, saturation, hue)
+
+    def __call__(self, meta_data, img, depth, points): 
+        img_jit = np.array(self.trancolor(Image.fromarray(img)))
+        return meta_data, img_jit, depth, points
 
 def get_bbox_label(label, image_size = None):
     border_list = [-1, 40, 80, 120, 160, 200, 240, 280, 320, 360, 400, 440, 480, 520, 560, 600, 640, 680]

@@ -62,15 +62,15 @@ def rotatePoints(points, theta, meta_data):
     points_rot = torch.mm(mat_rot, points.t()).t()
     return points_rot
 
-def InplaneRotator(meta_data, img, depth, points, 
-                   theta = None):
-    if(theta is None):
-        theta = np.random.rand()*2.*np.pi
+class InplaneRotator(object):
+    def __call__(self, meta_data, img, depth, points, theta = None):
+        if(theta is None):
+            theta = np.random.rand()*2.*np.pi
 
-    meta_data = rotateMetaData(meta_data, theta)
-    if(img is not None):
-        img = rotateImage(img, theta)
-    if(depth is not None):
-        depth = rotateImage(depth, theta)
+        meta_data = rotateMetaData(meta_data, theta)
+        if(img is not None):
+            img = rotateImage(img, theta)
+        if(depth is not None):
+            depth = rotateImage(depth, theta)
 
-    return meta_data, img, depth, points 
+        return meta_data, img, depth, points 

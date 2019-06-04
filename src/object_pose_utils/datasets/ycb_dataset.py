@@ -19,6 +19,10 @@ from object_pose_utils.datasets.image_processing import get_bbox_label
 class YcbDataset(PoseDataset):
     def __init__(self, dataset_root, mode, object_list, 
                  use_label_bbox = True, grid_size = 3885, 
+                 add_syn_background = True,
+                 background_files = None,
+                 add_syn_noise = True,
+                 refine = False,
                  *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.mode = mode
@@ -35,6 +39,9 @@ class YcbDataset(PoseDataset):
         self.list_rank = []
         self.index_to_object_name = {} #{2:002_master_chef_can, 3:...}
         self.use_label_bbox = use_label_bbox
+        self.add_syn_background = add_syn_background
+        self.add_syn_noise = add_syn_noise
+        self.refine = refine
         self.classes = ['__background__']
 
         self.cam_cx_1 = 312.9869
@@ -73,6 +80,7 @@ class YcbDataset(PoseDataset):
                     self.list_obj.append(item)
 
                 image_file.close()
+        self.len_real = len(self.image_list)
 
         if 'syn' in mode:
             for item in object_list:
@@ -87,6 +95,7 @@ class YcbDataset(PoseDataset):
                     self.image_list.append((image_line, item))
                     self.list_obj.append(item)
                 image_file.close()
+        self.len_syn = len(self.image_list)
         
         if 'grid' in mode:
             num_digits = len(str(grid_size))
@@ -95,6 +104,16 @@ class YcbDataset(PoseDataset):
                     image_line = '../depth_renders/{1}/{2:0{0}d}'.format(num_digits, self.classes[item], j)
                     self.image_list.append((image_line, item))
                     self.list_obj.append(item)
+
+        self.len_grid = len(self.image_list)
+
+        if self.add_syn_background and ('syn' in mode or 'grid' in mode):
+            if(background_files is None):
+                background_files = '{0}/image_sets/train_split.txt'.format(self.dataset_root)
+            with open(background_files) as f:
+                self.background = ['{0}/data/{1}-color.png'.format(self.dataset_root, x.rstrip('\n')) for x in f.readlines()]
+        else:
+            self.background = None
 
         if 'valid' in mode:
             for item in object_list:
@@ -140,7 +159,22 @@ class YcbDataset(PoseDataset):
         sub_path = self.getPath(index)
         path = '{0}/data/{1}-color.png'.format(self.dataset_root, sub_path)
         image = np.array(Image.open(path))
-        return image[:,:,:3]
+        if(self.IMAGE_CONTAINS_MASK):
+            mask = image[:,:,3:]
+        image = image[:,:,:3]
+        if(index >= self.len_real and index < self.len_grid):
+            if(self.add_syn_background): 
+                label = np.expand_dims(np.array(Image.open('{0}/data/{1}-label.png'.format(self.dataset_root, sub_path))), 2)
+                mask_back = ma.getmaskarray(ma.masked_equal(label, 0))
+                back_filename = random.choice(self.background)
+                back = np.array(Image.open(back_filename).convert("RGB"))
+                image = back * mask_back + image
+            if(self.add_syn_noise):
+                image = image + np.random.normal(loc=0.0, scale=7.0, size=image.shape)
+        
+        if(self.IMAGE_CONTAINS_MASK):
+            image = np.concatenate([image, mask], 2)
+        return image
 
     ### Should return dictionary containing {transform_mat, object_label}
     # Optionally containing {mask, bbox, camera_scale, camera_cx, camera_cy, camera_fx, camera_fy}
@@ -181,9 +215,10 @@ class YcbDataset(PoseDataset):
                     sub_path, len(mask.nonzero()[0]), self.minimum_num_pts))
                 #while 1:
                     #pass
+            
             returned_dict['mask'] = mask
         if bbox:  # needs to return x,y,w,h
-            if(self.use_label_bbox or syn_data):
+            if(self.use_label_bbox or (index >= self.len_real and index < self.len_grid)):
                 bbox = get_bbox_label(mask_label, image_size = self.image_size)
             else:
                 posecnn_meta = scio.loadmat('{0}/data/{1}-posecnn.mat'.format(self.dataset_root, sub_path))
