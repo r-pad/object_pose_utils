@@ -8,7 +8,7 @@ import cv2
 
 import torch
 import torchvision.transforms as transforms
-from generic_pose.utils import to_np
+from object_pose_utils.utils import to_np
 
 def mask2BBox(img):
     where = np.array(np.where(img[:,:,3]))

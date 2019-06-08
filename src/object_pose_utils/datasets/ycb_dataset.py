@@ -171,7 +171,7 @@ class YcbDataset(PoseDataset):
                 image = back * mask_back + image
             if(self.add_syn_noise):
                 image = image + np.random.normal(loc=0.0, scale=7.0, size=image.shape)
-        
+                image = image.astype(np.uint8) 
         if(self.IMAGE_CONTAINS_MASK):
             image = np.concatenate([image, mask], 2)
         return image
