@@ -24,3 +24,20 @@ class PointShifter(object):
             res.append(x)
         return res
 
+class PointMeanNormalizer(object):
+    def __init__(self, output_index):
+        self.output_index = output_index
+
+    def __call__(self, outputs, meta_data, output_types):
+        res = []
+        
+        assert output_types[self.output_index] in MODEL_POINT_OUTPUTS \
+                or output_types[self.output_index] in DEPTH_POINT_OUTPUTS
+
+        mean = torch.mean(outputs[self.output_index], dim=0)
+        for x, ot in zip(outputs, output_types):
+            if(ot in MODEL_POINT_OUTPUTS or ot in DEPTH_POINT_OUTPUTS):
+                x = x - mean 
+            res.append(x)
+        return res
+
