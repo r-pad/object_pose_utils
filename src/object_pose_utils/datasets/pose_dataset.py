@@ -222,64 +222,79 @@ class PoseDataset(Dataset):
         self.resample_on_error = resample_on_error
 
     def __getitem__(self, index):
-        outputs = [] 
+        outputs_list = [] 
         need_mask = not self.IMAGE_CONTAINS_MASK and len(self.output_types & MASK_OUTPUTS) > 0
         need_bbox = not self.BBOX_FROM_MASK and len(self.output_types & BBOX_OUTPUTS) > 0
         need_camera_matrix = len(self.output_types & CAMERA_MATRIX_OUTPUTS) >  0
         try:
-            meta_data = self.getMetaData(index, mask = need_mask, bbox = need_bbox, camera_matrix = need_camera_matrix)
+            meta_data_list = self.getMetaData(index, mask = need_mask, bbox = need_bbox, camera_matrix = need_camera_matrix)
             if(len(self.output_types & IMAGE_OUTPUTS) > 0 or (need_mask and self.IMAGE_CONTAINS_MASK)):
-                img = self.getImage(index)
+                img_list = self.getImage(index)
             else:
-                img = None
+                img_list = []
             if(len(self.output_types & DEPTH_OUTPUTS) > 0):
-                depth = self.getDepthImage(index)
+                depth_list = self.getDepthImage(index)
             else:
-                depth = None
+                depth_list = []
             if(len(self.output_types & MODEL_POINT_OUTPUTS) > 0):
-                points = self.getModelPoints(meta_data['object_label'])
+                points = self.getModelPoints(meta_data_list[0]['object_label'])
             else:
                 points = None
 
-            for preproc in self.preprocessors:
-                meta_data, img, depth, points = preproc(meta_data, img, depth, points)
+            if len(img_list) > 0:
+                for list_index in range(len(img_list)):
+                    outputs = []
+                    meta_data = meta_data_list[list_index]
+                    
+                    img = img_list[list_index]
+                    if len(depth_list) == 0:
+                        depth = None
+                    else:
+                        depth = depth_list[list_index]
+                    for preproc in self.preprocessors:
+                        meta_data, img, depth, points = preproc(meta_data, img, depth, points)
 
-            if(need_mask and self.IMAGE_CONTAINS_MASK):
-                meta_data['mask'] = img[:,:,3]
-            # Could build a output function at init to speed this up if its slow.
-            for output_type in self.output_data:
-                if(output_type in IMAGE_OUTPUTS):
-                    outputs.append(processImage(img.copy(), meta_data, output_type,
-                                                remove_mask = self.REMOVE_MASK,
-                                                background_fill = self.background_fill,
-                                                boarder_width = self.boarder_width))
-                elif(output_type in DEPTH_OUTPUTS):
-                    outputs.extend(processDepthImage(depth.copy(), meta_data, output_type,
-                                                     num_points = self.num_points,
-                                                     boarder_width = self.boarder_width))
-                elif(output_type in MODEL_POINT_OUTPUTS):
-                    outputs.append(processModelPoints(points.copy(), meta_data, output_type))
-                elif(output_type in TRANSFORM_OUTPUTS):
-                    outputs.append(processTransform(meta_data, output_type))
-                elif(output_type is OutputTypes.OBJECT_LABEL):
-                    outputs.append(torch.LongTensor([meta_data['object_label']]))
-                elif(output_type is OutputTypes.MASK):
-                    outputs.append(torch.LongTensor(meta_data['mask']))
-                elif(output_type is OutputTypes.BBOX):
-                    outputs.append(torch.LongTensor(meta_data['bbox']))
-                else:
-                    raise ValueError('Invalid Output Type {}'.format(output_type))
+                    if(need_mask and self.IMAGE_CONTAINS_MASK):
+                        meta_data['mask'] = img[:,:,3]
+                        # Could build a output function at init to speed this up if its slow.
+                    for output_type in self.output_data:
+                        if(output_type in IMAGE_OUTPUTS):
+                            outputs.append(processImage(img.copy(), meta_data, output_type,
+                                                        remove_mask = self.REMOVE_MASK,
+                                                        background_fill = self.background_fill,
+                                                        boarder_width = self.boarder_width))
+                        elif(output_type in DEPTH_OUTPUTS):
+                            outputs.extend(processDepthImage(depth.copy(), meta_data, output_type,
+                                                             num_points = self.num_points,
+                                                             boarder_width = self.boarder_width))
+                        elif(output_type in MODEL_POINT_OUTPUTS):
+                            outputs.append(processModelPoints(points.copy(), meta_data, output_type))
+                        elif(output_type in TRANSFORM_OUTPUTS):
+                            outputs.append(processTransform(meta_data, output_type))
+                        elif(output_type is OutputTypes.OBJECT_LABEL):
+                            outputs.append(torch.LongTensor([meta_data['object_label']]))
+                        elif(output_type is OutputTypes.MASK):
+                            outputs.append(torch.LongTensor(meta_data['mask']))
+                        elif(output_type is OutputTypes.BBOX):
+                            outputs.append(torch.LongTensor(meta_data['bbox']))
+                        else:
+                            raise ValueError('Invalid Output Type {}'.format(output_type))
+
+                    outputs_list.append(outputs)
         except PoseDataError as e:
             print('Exception on index {}: {}'.format(index, e))
             if(self.resample_on_error):
                 return self.__getitem__(np.random.randint(0, len(self)))
             else:
                 return [[] for _ in self.output_data_buffered]
-
-        for postproc in self.postprocessors:
-            outputs = postproc(outputs, meta_data, self.output_data_buffered)
+        for outputs_index in range(len(outputs_list)):
+            outputs = outputs_list[outputs_index]
+            for postproc in self.postprocessors:
+                outputs = postproc(outputs, meta_data, self.output_data_buffered)
+            outputs_list[outputs_index] = tuple(outputs)
             
-        return tuple(outputs)
+        return outputs_list
+    
     def getDepthImage(self, index):
         raise NotImplementedError('getDepthImage must be implemented by child classes')
     def getImage(self, index):

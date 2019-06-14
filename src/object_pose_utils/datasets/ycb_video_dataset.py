@@ -134,7 +134,7 @@ class YcbVideoDataset(PoseDataset):
         current_index = index
         while current_index < len(self.index_list):
             depth_image = self.ycb_dataset.getDepthImage(current_index)
-            image_list.append(depth_image)
+            image_list.extend(depth_image)
             current_index += self.interval
         return image_list
 
@@ -143,7 +143,7 @@ class YcbVideoDataset(PoseDataset):
         current_index = index
         while current_index < len(self.index_list):
             color_image = self.ycb_dataset.getImage(current_index)
-            image_list.append(color_image)
+            image_list.extend(color_image)
             current_index += self.interval
         print("image_list size {0}".format(len(image_list)))
         return image_list
@@ -151,8 +151,13 @@ class YcbVideoDataset(PoseDataset):
     ### Should return dictionary containing {transform_mat, object_label}                                                                
     # Optionally containing {mask, bbox, camera_scale, camera_cx, cam\era_cy, camera_fx, camera_fy}
     def getMetaData(self, index, mask=False, bbox=False, camera_matrix=False):
-        meta_data = self.ycb_dataset.getMetaData(index, mask, bbox, camera_matrix)
-        return meta_data
+        metadata_list = []
+        current_index = index
+        while current_index < len(self.index_list):
+            metadata = self.ycb_dataset.getMetaData(index, mask, bbox, camera_matrix)
+            metadata_list.extend(metadata)
+            current_index += self.interval
+        return metadata_list
 
     # Note: object_label here needs to be consistent to the object label returned in getMetaData
     def getModelPoints(self, object_label):

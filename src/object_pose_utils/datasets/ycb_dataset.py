@@ -154,7 +154,7 @@ class YcbDataset(PoseDataset):
         sub_path = self.getPath(index)
         path = '{0}/YCB_Video_Dataset/data/{1}-depth.png'.format(self.dataset_root, sub_path)
         image = np.array(Image.open(path))
-        return image
+        return [image]
 
     def getImage(self, index):
         sub_path = self.getPath(index)
@@ -175,7 +175,7 @@ class YcbDataset(PoseDataset):
                 image = image.astype(np.uint8) 
         if(self.IMAGE_CONTAINS_MASK):
             image = np.concatenate([image, mask], 2)
-        return image
+        return [image]
 
     ### Should return dictionary containing {transform_mat, object_label}
     # Optionally containing {mask, bbox, camera_scale, camera_cx, camera_cy, camera_fx, camera_fy}
@@ -251,7 +251,7 @@ class YcbDataset(PoseDataset):
             returned_dict['camera_fx'] = cam_fx
             returned_dict['camera_fy'] = cam_fy
 
-        return returned_dict
+        return [returned_dict]
 
 
     # Note: object_label here needs to be consistent to the object label returned in getMetaData
