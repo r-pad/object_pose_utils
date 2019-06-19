@@ -57,15 +57,16 @@ def quatL2Dist(q1, q2):
     return min(np.linalg.norm(q1-q2),np.linalg.norm(q1+q2))
 
 class TetraInterpolation(object):
-    def __init__(self, grid_level, values):
+    def __init__(self, grid_level, values = None):
         #self.vertices = vertices
-        eta = np.abs(values).sum()*(np.pi**2)/values.shape[0]
-        self.values = 1./eta * values
         self.level = grid_level
         self.grid = MultiResGrid(self.level) 
         self.num_verts = self.grid.vertices.shape[0]
         self.kd_tree = KDTree(np.vstack([self.grid.vertices, -self.grid.vertices]))
         
+        if(values is not None):
+            self.setValues(values)
+
         self.max_edge = -np.inf
         for j, tet in enumerate(self.grid.GetTetrahedra(self.level)):
             v1 = tet.vertices[0]
@@ -79,6 +80,10 @@ class TetraInterpolation(object):
             d24 = quatL2Dist(v2,v4)
             d34 = quatL2Dist(v3,v4)
             self.max_edge = max(self.max_edge, d12, d13, d14, d23, d24, d34)
+
+    def setValues(self, values):
+        eta = np.abs(values).sum()*(np.pi**2)/values.shape[0]
+        self.values = 1./eta * values
 
     def containingTetra(self, q):
         vert_ids = self.kd_tree.query_radius([q], r = self.max_edge)[0]

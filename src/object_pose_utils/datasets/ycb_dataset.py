@@ -105,6 +105,14 @@ class YcbDataset(PoseDataset):
                     self.image_list.append((image_line, item))
                     self.list_obj.append(item)
 
+        if 'offset' in mode:
+            num_digits = len(str(grid_size))
+            for item in object_list:
+                for j in range(grid_size):
+                    image_line = '../depth_renders_offset/{1}/{2:0{0}d}'.format(num_digits, self.classes[item], j)
+                    self.image_list.append((image_line, item))
+                    self.list_obj.append(item)
+
         self.len_grid = len(self.image_list)
 
         if self.add_syn_background and ('syn' in mode or 'grid' in mode):
