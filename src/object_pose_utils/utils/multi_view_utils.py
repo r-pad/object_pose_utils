@@ -14,8 +14,6 @@ def applyTransform(poses, cameraTransforms):
         R1c_padded = np.identity(4)
         R1c_padded[:3, :3] = R1c
         R1c_quat = quaternion_from_matrix(R1c_padded)
-        print("R1c_quat: {0}".format(R1c_quat))
-        print("current_pose: {0}".format(current_pose))
         first_frame_pose = quaternion_multiply(R1c_quat, current_pose.cpu().detach().numpy())
         transformed.append(first_frame_pose)
 

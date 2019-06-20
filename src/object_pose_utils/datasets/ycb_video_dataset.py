@@ -6,6 +6,8 @@ from .pose_dataset import PoseDataset
 from object_pose_utils.datasets.ycb_dataset import YcbDataset
 import os
 import scipy.io as scio
+from object_pose_utils.datasets.pose_dataset import OutputTypes as otypes
+from object_pose_utils.datasets.image_processing import ImageNormalizer
 
 class YcbVideoDataset:
     def __init__(self, dataset_root, mode, object_id, 
@@ -30,7 +32,22 @@ class YcbVideoDataset:
         self.video_len = video_len
         
         # Initialize the wrapped ycb_dataset
-        self.ycb_dataset = YcbDataset(dataset_root, mode, [object_id], use_label_bbox, grid_size,add_syn_background, background_files, add_syn_noise, refine, args, kwargs)
+        output_format = [otypes.DEPTH_POINTS_MASKED_AND_INDEXES,
+                                          otypes.IMAGE_CROPPED,
+                                          otypes.MODEL_POINTS_TRANSFORMED,
+                                          otypes.MODEL_POINTS,
+                                          otypes.OBJECT_LABEL,
+                                          otypes.QUATERNION,
+                         ]
+        self.ycb_dataset = YcbDataset(dataset_root, mode=mode,
+                                                  object_list = [object_id],
+                                                  output_data = output_format,
+                                                  resample_on_error = True,
+                                                  #preprocessors = [YCBOcclusionAugmentor(dataset_root), ColorJitter()],
+                                                  #postprocessors = [ImageNormalizer(), PointShifter()],
+                                                  postprocessors = [ImageNormalizer()],
+                                                  image_size = [640, 480], num_points=1000)
+        #self.ycb_dataset = YcbDataset(dataset_root, mode, [object_id], use_label_bbox, grid_size,add_syn_background, background_files, add_syn_noise, refine, args, kwargs)
 
         # Fill in the object id to class name list
         classes = ['__background__']
@@ -159,9 +176,17 @@ class YcbVideoDataset:
         return model_points
 
     def getItem(self, index):
-        global_index = self.index_list[index]
-        outputs = self.ycb_dataset.__getitem__(global_index)
-        return outputs
+        # Input: index wrt local index in the specifide video
+        outputs_list = []
+        current_index = index
+        count = 0 
+        while current_index < len(self.index_list) and count < self.video_len:
+            global_index = self.index_list[current_index]
+            outputs = self.ycb_dataset.__getitem__(global_index)
+            outputs_list.append(outputs)
+            count += 1
+            current_index += self.interval
+        return outputs_list
 
     def getCameraTransforms(self, index):
         transform_list = []
