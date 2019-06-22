@@ -92,5 +92,8 @@ class YcbVideoDataset(Dataset):
 
         return transform_list
 
-    def getLen(self):
+    def __getitem__(self, index):
+        return self.getItem(index), self.getCameraTransforms(index)
+
+    def __len__(self):
         return len(self.index_list)
