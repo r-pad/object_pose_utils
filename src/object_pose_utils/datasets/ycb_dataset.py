@@ -32,12 +32,9 @@ class YcbDataset(PoseDataset):
         self.list_depth = []
         self.list_label = []
         self.list_obj = []
-        self.pt = {}
         self.num_pt_mesh_small = 500
         self.num_pt_mesh_large = 2600
         self.minimum_num_pts = 50
-        self.list_rank = []
-        self.index_to_object_name = {} #{2:002_master_chef_can, 3:...}
         self.use_label_bbox = use_label_bbox
         self.add_syn_background = add_syn_background
         self.add_syn_noise = add_syn_noise
