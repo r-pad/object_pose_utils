@@ -10,7 +10,7 @@ def applyTransform(poses, cameraTransforms):
     for i in range(0, len(poses)):
         current_pose = poses[i]
         camera_transform = cameraTransforms[i]
-        R1c = camera_transform[:, :3].transpose()
+        R1c = camera_transform[:3, :3].transpose()
         R1c_padded = np.identity(4)
         R1c_padded[:3, :3] = R1c
         R1c_quat = quaternion_from_matrix(R1c_padded)
@@ -23,17 +23,17 @@ def applyTransform(poses, cameraTransforms):
 def computeCameraTransform(initial_camera_matrix, current_camera_matrix):
     # Initial camera matrix = from world to initial frame (Tiw) 3x4
     # current camera matrix = from world to current frame (Tcw) 3x4
-    Rcw = current_camera_matrix[:, :3]
-    tcw = current_camera_matrix[:, 3]
-    Riw = initial_camera_matrix[:, :3]
-    tiw = initial_camera_matrix[:, 3]
+    Rcw = current_camera_matrix[:3, :3]
+    tcw = current_camera_matrix[:3, 3]
+    Riw = initial_camera_matrix[:3, :3]
+    tiw = initial_camera_matrix[:3, 3]
 
     Rci = np.matmul(Rcw, Riw.transpose())
     tci = tcw - np.matmul(Rci, tiw)
 
-    Tci = np.zeros((3,4))
-    Tci[:, :3] = Rci
-    Tci[:, 3] = tci
+    Tci = np.eye(4)
+    Tci[:3, :3] = Rci
+    Tci[:3, 3] = tci
 
     return Tci
                                                                         
