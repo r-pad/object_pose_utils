@@ -65,12 +65,13 @@ class LinemodDataset(PoseDataset):
     def getDepthImage(self, index):
         path = self.list_depth[index]
         image = np.array(Image.open(path))
-        return image
+        return [image]
 
     def getImage(self, index):
         path = self.list_rgb[index]
         image = np.array(Image.open(path))
-        return image
+        print(image)
+        return [image]
 
     def getModelPoints(self, object_label):
         model_points = self.pt[object_label] / 1000.0
@@ -131,7 +132,7 @@ class LinemodDataset(PoseDataset):
             returned_dict['camera_fx'] = 572.41140
             returned_dict['camera_fy'] = 573.57043
 
-        return returned_dict
+        return [returned_dict]
 
 
     def ply_vtx(self,path):
