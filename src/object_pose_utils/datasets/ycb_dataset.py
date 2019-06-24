@@ -24,7 +24,7 @@ class YcbDataset(PoseDataset):
                  add_syn_noise = True,
                  refine = False,
                  *args, **kwargs):
-        super().__init__(*args, **kwargs)
+        super(YcbDataset, self).__init__(*args, **kwargs)
         self.mode = mode
         self.dataset_root = dataset_root
         self.object_list = object_list
@@ -112,7 +112,7 @@ class YcbDataset(PoseDataset):
 
         self.len_grid = len(self.image_list)
 
-        if self.add_syn_background and ('syn' in mode or 'grid' in mode):
+        if self.add_syn_background and ('syn' in mode or 'grid' in mode or 'offset' in mode):
             if(background_files is None):
                 background_files = '{0}/image_sets/train_split.txt'.format(self.dataset_root)
             with open(background_files) as f:
