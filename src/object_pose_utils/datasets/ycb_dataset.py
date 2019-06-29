@@ -326,7 +326,13 @@ class YcbDataset(PoseDataset):
             cmin -= delt
         return cmin, rmin, cmax-cmin, rmax-rmin
 
-  
+    # Return the camera transform wrt the global frame
+    def getCameraTransform(self, index):
+        sub_path = self.getPath(index)
+        path = '{0}/data/{1}-meta.mat'.format(self.dataset_root, sub_path)
+        meta = scio.loadmat(path)
+        rotation_translation_matrix = meta["rotation_translation_matrix"]
+        return rotation_translation_matrix
                  
 """
 Created on Tue April 29 2019
