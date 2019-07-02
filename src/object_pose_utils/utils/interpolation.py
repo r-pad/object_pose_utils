@@ -12,7 +12,7 @@ import scipy
 import scipy.io as sio
 from functools import partial
 
-from object_pose_utils.utils.pose_processing import getGaussianKernal
+from object_pose_utils.utils.pose_processing import getGaussianKernal, quatAngularDiffBatch
 from object_pose_utils.utils.multiscale_grid import MultiResGrid
 
 eps = 1e-12
@@ -85,6 +85,25 @@ class TetraInterpolation(object):
         eta = np.abs(values).sum()*(np.pi**2)/values.shape[0]
         self.values = 1./eta * values
 
+    def containingTetraFast(self, q):
+        vert_ids = self.kd_tree.query_radius([q], r = self.max_edge)[0]
+        vert_ids = np.where(vert_ids < self.num_verts, vert_ids, vert_ids - self.num_verts)
+
+        tetras = self.grid.GetTetras(self.level)
+        near_tetras = np.logical_and.reduce([np.isin(tetras[:,0], vert_ids),
+                                             np.isin(tetras[:,1], vert_ids),
+                                             np.isin(tetras[:,2], vert_ids),
+                                             np.isin(tetras[:,3], vert_ids)])
+        tetra_ids = np.nonzero(near_tetras)[0]
+        min_idx = -1
+        min_val = np.inf
+        for t_id in tetra_ids:
+            theta = max(quatAngularDiffBatch(self.grid.GetTetrahedron(t_id).vertices, q))
+            if(theta < min_val):
+                min_val = theta
+                min_idx = t_id
+        return min_idx
+
     def containingTetra(self, q):
         vert_ids = self.kd_tree.query_radius([q], r = self.max_edge)[0]
         vert_ids = np.where(vert_ids < self.num_verts, vert_ids, vert_ids - self.num_verts)
@@ -104,8 +123,12 @@ class TetraInterpolation(object):
     def baryTetraTransform(self, t_id):
         return np.linalg.inv(np.vstack(self.grid.GetTetrahedron(t_id, self.level).vertices).T)
 
+    def smooth(self, q):
+        kd_dist, idxs = self.kd_tree.query(q.reshape(-1,4), k=4)
+        return (self.values[idxs]*kd_dist).sum(axis=1)/(kd_dist.sum(axis=1))
+
     def __call__(self, q):
-        t_id = self.containingTetra(q)
+        t_id = self.containingTetraFast(q)
         A = self.baryTetraTransform(t_id)
         v_ids = self.grid.GetTetras(self.level)[t_id]
 
