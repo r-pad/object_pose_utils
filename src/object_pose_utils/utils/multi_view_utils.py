@@ -1,5 +1,7 @@
 import numpy as np
 from quat_math import quaternion_from_matrix, quaternion_multiply
+from torch.autograd import Variable
+import torch
 
 # Apply each camera transform to each pose
 def applyTransform(poses, cameraTransforms):
@@ -9,8 +11,8 @@ def applyTransform(poses, cameraTransforms):
     transformed = []
     for i in range(0, len(poses)):
         current_pose = poses[i]
-        camera_transform = cameraTransforms[i]
-        R1c = camera_transform[:, :3].transpose()
+        camera_transform = cameraTransforms[i][0]
+        R1c = camera_transform[:, :3].transpose(0,1)
         R1c_padded = np.identity(4)
         R1c_padded[:3, :3] = R1c
         R1c_quat = quaternion_from_matrix(R1c_padded)
@@ -36,4 +38,19 @@ def computeCameraTransform(initial_camera_matrix, current_camera_matrix):
     Tci[:, 3] = tci
 
     return Tci
-                                                                        
+
+# Given an estimator and input data, output (normalized predicted pose, ground truth pose)
+def get_prediction(estimator, data):
+                                                                 points, choose, img, target, model_points, idx, quat = data
+                                                                 idx = idx - 1
+                                                                 points, choose, img, target, model_points, idx = Variable(points).cuda(), \
+                                                                                                                  Variable(choose).cuda(), \
+                                                                                                                  Variable(img).cuda(), \
+                                                                                                                  Variable(target).cuda(), \
+                                                                                                                  Variable(model_points).cuda(), \
+                                                                                                                  Variable(idx).cuda()
+                                                                 pred_r, pred_t, pred_c, emb = estimator(img, points, choose, idx)
+                                                                 pred_q = pred_r[0,torch.argmax(pred_c)][[1,2,3,0]]
+                                                                 pred_q /= pred_q.norm()
+
+                                                                 return pred_q, quat[0]

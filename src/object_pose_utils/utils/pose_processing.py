@@ -52,6 +52,7 @@ def meanShiftStep(pts, verts, weights, sigma=np.sqrt(2)*np.pi/4):
 def meanShift(pts, verts, weights, sigma=np.sqrt(2)*np.pi/4, eps_term = 1e-5, max_iter = 100):
     for _ in range(max_iter):
         new_pts = meanShiftStep(pts, verts, weights, sigma)
+        pts = new_pts
         if(torch.max(torch.abs(pts-new_pts)) < eps_term):
             break;
     return new_pts

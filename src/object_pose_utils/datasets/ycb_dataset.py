@@ -24,7 +24,7 @@ class YcbDataset(PoseDataset):
                  add_syn_noise = True,
                  refine = False,
                  *args, **kwargs):
-        super().__init__(*args, **kwargs)
+        super(YcbDataset, self).__init__(*args, **kwargs)
         self.mode = mode
         self.dataset_root = dataset_root
         self.object_list = object_list
@@ -32,12 +32,9 @@ class YcbDataset(PoseDataset):
         self.list_depth = []
         self.list_label = []
         self.list_obj = []
-        self.pt = {}
         self.num_pt_mesh_small = 500
         self.num_pt_mesh_large = 2600
         self.minimum_num_pts = 50
-        self.list_rank = []
-        self.index_to_object_name = {} #{2:002_master_chef_can, 3:...}
         self.use_label_bbox = use_label_bbox
         self.add_syn_background = add_syn_background
         self.add_syn_noise = add_syn_noise
@@ -56,11 +53,11 @@ class YcbDataset(PoseDataset):
 
 
         # Fill in the index to object name array
-        with open(os.path.join(self.dataset_root, 'YCB_Video_Dataset/image_sets', 'classes.txt')) as f:
+        with open(os.path.join(self.dataset_root, 'image_sets', 'classes.txt')) as f:
             self.classes.extend([x.rstrip('\n') for x in f.readlines()])
 
         #now self.classes = ('__background__', '002_master_chef_can', '003_cracker_box', '004_sugar_box', '005_tomato_soup_can', '006_mustard_bottle', \
-        #                '007_tuna_fish_can', '008_pudding_box', '009_gelatin_box', '010_potted_meat_cban', '011_banana', '019_pitcher_base', \
+        #                '007_tuna_fish_can', '008_pudding_box', '009_gelatin_box', '010_potted_meat_can', '011_banana', '019_pitcher_base', \
         #                '021_bleach_cleanser', '024_bowl', '025_mug', '035_power_drill', '036_wood_block', '037_scissors', '040_large_marker', \
         #                '051_large_clamp', '052_extra_large_clamp', '061_foam_brick')
 
@@ -68,7 +65,7 @@ class YcbDataset(PoseDataset):
         # image_list will contain (0086/000867, object num), (0086/000868, object num) ...
         if 'train' in mode:
             for item in object_list:
-                path = '{0}/YCB_Video_Dataset/image_sets/{1}_train_split.txt'.format(self.dataset_root, self.classes[item])
+                path = '{0}/image_sets/{1}_train_split.txt'.format(self.dataset_root, self.classes[item])
                 image_file = open(path)
                 while 1:
                     image_line = image_file.readline()
@@ -84,7 +81,7 @@ class YcbDataset(PoseDataset):
 
         if 'syn' in mode:
             for item in object_list:
-                path = '{0}/YCB_Video_Dataset/image_sets/{1}_syn.txt'.format(self.dataset_root, self.classes[item])
+                path = '{0}/image_sets/{1}_syn.txt'.format(self.dataset_root, self.classes[item])
                 image_file = open(path)
                 while 1:
                     image_line = image_file.readline()
@@ -105,19 +102,27 @@ class YcbDataset(PoseDataset):
                     self.image_list.append((image_line, item))
                     self.list_obj.append(item)
 
+        if 'offset' in mode:
+            num_digits = len(str(grid_size))
+            for item in object_list:
+                for j in range(grid_size):
+                    image_line = '../depth_renders_offset/{1}/{2:0{0}d}'.format(num_digits, self.classes[item], j)
+                    self.image_list.append((image_line, item))
+                    self.list_obj.append(item)
+
         self.len_grid = len(self.image_list)
 
-        if self.add_syn_background and ('syn' in mode or 'grid' in mode):
+        if self.add_syn_background and ('syn' in mode or 'grid' in mode or 'offset' in mode):
             if(background_files is None):
-                background_files = '{0}/YCB_Video_Dataset/image_sets/train_split.txt'.format(self.dataset_root)
+                background_files = '{0}/image_sets/train_split.txt'.format(self.dataset_root)
             with open(background_files) as f:
-                self.background = ['{0}/YCB_Video_Dataset/data/{1}-color.png'.format(self.dataset_root, x.rstrip('\n')) for x in f.readlines()]
+                self.background = ['{0}/data/{1}-color.png'.format(self.dataset_root, x.rstrip('\n')) for x in f.readlines()]
         else:
             self.background = None
 
         if 'valid' in mode:
             for item in object_list:
-                path = '{0}/YCB_Video_Dataset/image_sets/{1}_valid_split.txt'.format(self.dataset_root, self.classes[item])
+                path = '{0}/image_sets/{1}_valid_split.txt'.format(self.dataset_root, self.classes[item])
                 image_file = open(path)
                 while 1:
                     image_line = image_file.readline()
@@ -132,7 +137,7 @@ class YcbDataset(PoseDataset):
 
         if mode == 'test':
             for item in object_list:
-                path = '{0}/YCB_Video_Dataset/image_sets/{1}_keyframe.txt'.format(self.dataset_root,
+                path = '{0}/image_sets/{1}_keyframe.txt'.format(self.dataset_root,
                                                                                      self.classes[item])
                 image_file = open(path)
                 while 1:
@@ -147,25 +152,24 @@ class YcbDataset(PoseDataset):
                 image_file.close()
 
     def getPath(self, index):
-        #print("index is {0}".format(index))
         return self.image_list[index][0]
 
     def getDepthImage(self, index):
         sub_path = self.getPath(index)
-        path = '{0}/YCB_Video_Dataset/data/{1}-depth.png'.format(self.dataset_root, sub_path)
+        path = '{0}/data/{1}-depth.png'.format(self.dataset_root, sub_path)
         image = np.array(Image.open(path))
         return image
 
     def getImage(self, index):
         sub_path = self.getPath(index)
-        path = '{0}/YCB_Video_Dataset/data/{1}-color.png'.format(self.dataset_root, sub_path)
+        path = '{0}/data/{1}-color.png'.format(self.dataset_root, sub_path)
         image = np.array(Image.open(path))
         if(self.IMAGE_CONTAINS_MASK):
             mask = image[:,:,3:]
         image = image[:,:,:3]
         if(index >= self.len_real and index < self.len_grid):
             if(self.add_syn_background): 
-                label = np.expand_dims(np.array(Image.open('{0}/YCB_Video_Dataset/data/{1}-label.png'.format(self.dataset_root, sub_path))), 2)
+                label = np.expand_dims(np.array(Image.open('{0}/data/{1}-label.png'.format(self.dataset_root, sub_path))), 2)
                 mask_back = ma.getmaskarray(ma.masked_equal(label, 0))
                 back_filename = random.choice(self.background)
                 back = np.array(Image.open(back_filename).convert("RGB"))
@@ -186,7 +190,7 @@ class YcbDataset(PoseDataset):
         returned_dict['object_label'] = object_label
 
         sub_path = self.image_list[index][0]
-        path = '{0}/YCB_Video_Dataset/data/{1}-meta.mat'.format(self.dataset_root, sub_path)
+        path = '{0}/data/{1}-meta.mat'.format(self.dataset_root, sub_path)
         meta = scio.loadmat(path)
 
         pose_idx = np.where(meta['cls_indexes'].flatten()==object_label)[0][0]
@@ -202,7 +206,7 @@ class YcbDataset(PoseDataset):
             obj = meta['cls_indexes'].flatten().astype(np.int32)
             depth = self.getDepthImage(index)
             sub_path = self.image_list[index][0]
-            path = '{0}/YCB_Video_Dataset/data/{1}-label.png'.format(self.dataset_root, sub_path)
+            path = '{0}/data/{1}-label.png'.format(self.dataset_root, sub_path)
             label = np.array(Image.open(path))
             
             mask_depth = ma.getmaskarray(ma.masked_not_equal(depth, 0))
@@ -222,7 +226,7 @@ class YcbDataset(PoseDataset):
             if(self.use_label_bbox or (index >= self.len_real and index < self.len_grid)):
                 bbox = get_bbox_label(mask_label, image_size = self.image_size)
             else:
-                posecnn_meta = scio.loadmat('{0}/YCB_Video_Dataset/data/{1}-posecnn.mat'.format(self.dataset_root, sub_path))
+                posecnn_meta = scio.loadmat('{0}/data/{1}-posecnn.mat'.format(self.dataset_root, sub_path))
                 obj_idx = np.nonzero(posecnn_meta['rois'][:,1].astype(int) == object_label)[0]
                 if(len(obj_idx) == 0):
                     raise PoseDataError('Object {} not in PoseCNN ROIs {}'.format(object_label, sub_path))
@@ -258,7 +262,7 @@ class YcbDataset(PoseDataset):
     def getModelPoints(self, object_label):
         object_name = self.classes[object_label]
 
-        input_file = open('{0}/YCB_Video_Dataset/models/{1}/points.xyz'.format(self.dataset_root, object_name))
+        input_file = open('{0}/models/{1}/points.xyz'.format(self.dataset_root, object_name))
         cld = []
         while 1:
             input_line = input_file.readline()
