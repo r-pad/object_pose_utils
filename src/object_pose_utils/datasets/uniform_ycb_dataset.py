@@ -17,11 +17,13 @@ from object_pose_utils.datasets.ycb_dataset import YcbDataset as YCBDataset
 from object_pose_utils.datasets.ycb_dataset import get_bbox_label
 
 class UniformYCBDataset(YCBDataset):
-    def __init__(self, dataset_root, object_label, use_label_bbox = True, *args, **kwargs):
+    def __init__(self, dataset_root, object_label, use_label_bbox = True, fill_with_exact = True,
+            *args, **kwargs):
         super(YCBDataset, self).__init__(*args, **kwargs)
         self.dataset_root = dataset_root
         self.use_label_bbox = use_label_bbox
         self.minimum_num_pts = 50
+        self.fill_with_exact = fill_with_exact
         self.classes = ['__background__']
 
         self.cam_cx_1 = 312.9869
@@ -43,9 +45,14 @@ class UniformYCBDataset(YCBDataset):
         # For now its one object per dataset and well use concat dataset
         self.setObject(object_label)
 
-        with open(os.path.join(self.dataset_root, 'image_sets', 'binded_grid.pkl'), 'rb') as f:
+        with open(os.path.join(self.dataset_root, 'image_sets', 'binned_grid_offset.pkl'), 'rb') as f:
             data = pickle.load(f)
-            self.syn_tetra_bins = data['syn_tetra_bins']
+            self.offset_tetra_bins = data['syn_tetra_bins']
+
+        if(fill_with_exact):
+            with open(os.path.join(self.dataset_root, 'image_sets', 'binded_grid.pkl'), 'rb') as f:
+                data = pickle.load(f)
+                self.vert_tetra_bins = data['syn_tetra_bins']
 
     def setObject(self, object_label):
         self.object_label = object_label
@@ -56,15 +63,21 @@ class UniformYCBDataset(YCBDataset):
     def getPath(self, index):
         if(len(self.tetra_bins[index])):
             sub_path = np.random.choice(self.tetra_bins[index])
-        else:
-            render_idx = np.random.choice(self.syn_tetra_bins[index])
+        elif(len(self.offset_tetra_bins[index])):
+            render_idx = np.random.choice(self.offset_tetra_bins[index])
+            sub_path = 'depth_renders_offset/{0}/{1}'.format(self.classes[self.object_label], render_idx)
+        elif(self.fill_with_exact):
+            render_idx = np.random.choice(self.vert_tetra_bins[index])
             sub_path = 'depth_renders/{0}/{1}'.format(self.classes[self.object_label], render_idx)
+        else:
+            raise PoseDataError('No data for bin {} and fill_with_exact not set'.format(index))
+
         return sub_path
 
     ### Should return dictionary containing {transform_mat, object_label}
     # Optionally containing {mask, bbox, camera_scale, camera_cx, camera_cy, camera_fx, camera_fy}
     def getMetaData(self, index, mask=False, bbox=False, camera_matrix=False):
-        syn_data = sub_path[:14] == 'depth_renders/'
+        syn_data = sub_path[:13] == 'depth_renders'  
 
         returned_dict = {}
         returned_dict['object_label'] = self.object_label
@@ -134,6 +147,6 @@ class UniformYCBDataset(YCBDataset):
         return returned_dict
 
     def __len__(self):
-        return len(self.syn_tetra_bins)
+        return len(self.tetra_bins)
 
 

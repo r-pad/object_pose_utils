@@ -19,7 +19,7 @@ class FeatureDataset(YCBDataset):
                                              *args, **kwargs)
 
         self.feature_root = feature_root
-        self num_augs = num_augs
+        self.num_augs = num_augs
 
     def __getitem__(self, index):
         try:
@@ -31,7 +31,7 @@ class FeatureDataset(YCBDataset):
                         '_{}_{}_feat.npz'.format(self.classes[obj], aug_idx))
             else:
                 data = np.load(os.path.join(self.feature_root, 'data', self.getPath(index)) + 
-                        '_{}_{}_feat.npz'.format(self.classes[obj]))
+                        '_{}_feat.npz'.format(self.classes[obj]))
         except (IOError, PoseDataError)  as e:
             print('Exception on index {}: {}'.format(index, e))
             if(self.resample_on_error):
@@ -50,14 +50,14 @@ class UniformFeatureDataset(UniformYCBDataset):
                                                     *args, **kwargs)
 
         self.feature_root = feature_root
-        self num_augs = num_augs
+        self.num_augs = num_augs
 
     def __getitem__(self, index):
         try:
             if(self.num_augs > 0):
                 aug_idx = np.random.randint(self.num_augs)
                 data = np.load(os.path.join(self.feature_root, self.getPath(index)) + 
-                        '_{}_feat.npz'.format(self.classes[self.object_label], aug_idx))
+                        '_{}_{}_feat.npz'.format(self.classes[self.object_label], aug_idx))
             else:
                 data = np.load(os.path.join(self.feature_root, self.getPath(index)) + 
                         '_{}_feat.npz'.format(self.classes[self.object_label]))

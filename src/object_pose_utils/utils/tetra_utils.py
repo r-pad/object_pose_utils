@@ -8,6 +8,8 @@ Created on Tue Nov 21 17:35:53 2017
 import numpy as np
 from quat_math import projectedAverageQuaternion
 from object_pose_utils.utils.multiscale_grid import MultiResGrid
+from object_pose_utils.utils.pose_processing import quatAngularDiffBatch
+
 import scipy
 from sklearn.neighbors import KDTree
 
@@ -100,6 +102,33 @@ class SearchableTetraGrid(object):
         if(not return_all):
             raise ValueError('Did not find containing tetrahedra for {}'.format(q)) 
         return ids
+
+    def containingTetraFast(self, q):
+        vert_ids = self.kd_tree.query_radius([q], r = self.max_edge)[0]
+        vert_ids = np.where(vert_ids < self.num_verts, vert_ids, vert_ids - self.num_verts)
+
+        tetras = self.grid.GetTetras(self.level)
+        near_tetras = np.logical_and.reduce([np.isin(tetras[:,0], vert_ids),
+                                             np.isin(tetras[:,1], vert_ids),
+                                             np.isin(tetras[:,2], vert_ids),
+                                             np.isin(tetras[:,3], vert_ids)])
+        tetra_ids = np.nonzero(near_tetras)[0]
+        min_idx = -1
+        min_val = np.inf
+        for t_id in tetra_ids:
+            theta = max(quatAngularDiffBatch(self.grid.GetTetrahedron(t_id).vertices, q))
+            if(theta < min_val):
+                min_val = theta
+                min_idx = t_id
+        return min_idx
+
+    def query(self, q, k=1):
+        if(type(q) is not np.ndarray):
+            q = np.array(q)
+        kd_dist, vert_ids = self.kd_tree.query(q.reshape(-1,4), k=k)
+        vert_ids = np.where(vert_ids < self.num_verts, vert_ids, vert_ids - self.num_verts)
+        # Technically should calc angular distances 
+        return kd_dist, vert_ids
 
 def refineTetrahedron(q, tetrahedron, dist_func, metric_func, levels=2):
     if(levels == 0):

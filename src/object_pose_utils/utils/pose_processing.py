@@ -55,6 +55,7 @@ def meanShift(pts, verts, weights, sigma=np.sqrt(2)*np.pi/4, eps_term = 1e-5, ma
         pts = new_pts
         if(torch.max(torch.abs(pts-new_pts)) < eps_term):
             break;
+        pts = new_pts
     return new_pts
             
 def pose2Viewpoint(q):
