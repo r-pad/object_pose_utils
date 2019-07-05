@@ -92,7 +92,7 @@ class BinghamInterpolation(object):
             Ms.append(makeBinghamM(v))
         M = torch.stack(Ms)
         Z = torch.cat([torch.zeros(1),-sigma.repeat(3)])
-        self.eta = bingham_const(Z[1:]).float()
+        self.eta = bingham_const(Z[1:]).float()/2.0
         Z = torch.diag(Z)
         self.MZMt = torch.bmm(torch.bmm(M, Z.repeat([len(Ms),1,1])), torch.transpose(M,2,1))
         if(torch.cuda.is_available()):
