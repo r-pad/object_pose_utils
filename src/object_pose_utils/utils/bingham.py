@@ -123,3 +123,14 @@ def iso_loss_calculation(pred_mean, pred_sigma, true_r):
     #    raise ValueError('NAN lik: {} for mean {} and sigma {}'.format(lik, pred_mean, pred_sigma))
     return loss, lik 
 
+def bingham_multiply(M1, Z1, M2, Z2):
+    A = torch.mm(torch.mm(M1,Z1),M1.t()) + torch.mm(torch.mm(M2,Z2),M2.t())
+    e_vals, e_vecs = torch.eig(A, eigenvectors=True)
+    assert(torch.all(e_vals[:,1] == 0)) 
+    e_vals = e_vals[:,0]
+    idxs = torch.argsort(e_vals, descending=True)
+    Z = e_vals[idxs] - torch.max(e_vals)
+    M = e_vecs[idxs].t()
+    return M, Z
+
+

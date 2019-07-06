@@ -1,5 +1,7 @@
 import numpy as np
 from quat_math import quaternion_from_matrix, quaternion_multiply
+import torch
+from object_pose_utils.utils.pose_processing import tensorMultiplyBatch
 
 # Apply each camera transform to each pose
 def applyTransform(poses, cameraTransforms):
@@ -18,6 +20,18 @@ def applyTransform(poses, cameraTransforms):
         transformed.append(first_frame_pose)
 
     return transformed
+
+# Apply each camera transform to each pose
+def applyTransformBatch(poses, camera_transform):
+    R1c = camera_transform[:3, :3].transpose()
+    R1c_padded = np.identity(4)
+    R1c_padded[:3, :3] = R1c
+    trans_quat = torch.tensor(quaternion_from_matrix(R1c_padded)).unsqueeze(0).repeat(poses.shape[0],1).float()
+    if poses.is_cuda:
+        trans_quat = trans_quat.cuda()
+    transformed = tensorMultiplyBatch(trans_quat, poses)
+    return transformed
+
 
 # Compute the camera transform matrix from the initial frame to the current frame
 def computeCameraTransform(initial_camera_matrix, current_camera_matrix):

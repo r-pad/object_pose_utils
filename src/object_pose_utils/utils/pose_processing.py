@@ -12,6 +12,9 @@ from quat_math import (quatDiff,
                        quaternion_inverse,
                        quaternion_about_axis)
 
+from object_pose_utils.utils import to_np
+
+
 from functools import partial
 from itertools import product
 
@@ -65,8 +68,9 @@ def unique_tol(quats, tol = 0.001, **kwargs):
         idx = idx.cuda()
     idx_all = torch.einsum("ab,b->ab", (d.float(), reversed(idx+1).float()))
     indices = torch.argmax(idx_all, 1, keepdim=True).flatten()
-    
-    quats_unique = quats[indices == idx,:]
+    u_idxs = indices == idx
+    quats_unique = quats[u_idxs,:]
+
     if(len(kwargs)):
         edge_idxs = [1]
         while(len(edge_idxs)):
