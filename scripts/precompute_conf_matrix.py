@@ -5,7 +5,7 @@ from object_pose_utils.utils.pose_processing import quatAngularDiffBatch
 import os.path
 from object_pose_utils.datasets.pose_dataset import OutputTypes as otypes
 import torch
-from dense_fusion.network import PoseNet
+from dense_fusion.network import PoseNet, PoseNetGlobal
 import numpy as np
 from torch.autograd import Variable
 from generic_pose.utils import to_np, to_var
@@ -19,12 +19,12 @@ def get_index(bins, pose):
 my_path = os.path.abspath(os.path.dirname(__file__))
 network_path_prefix = os.path.join(my_path, "..", "networks")
 dataset_path_prefix = os.path.join(my_path, "..", "datasets")
-dataset_root = os.path.join(dataset_path_prefix, "DenseFusion/datasets/ycb")
+dataset_root = os.path.join(dataset_path_prefix, "DenseFusion/datasets/ycb/YCB_Video_Dataset")
 
 # YCB dataset has 21 objects that have object id 1-21.
 object_list = list(range(1,22))
 #dataset_root = '/home/mengyunx/DenseFusion/trained_checkpoints/ycb/pose_model_26_0.012863246640872631.pth'
-mode = "valid"
+mode = ["valid", "syn", "grid", "offset"]
 
 output_format = [otypes.DEPTH_POINTS_MASKED_AND_INDEXES,
                  otypes.IMAGE_CROPPED,
@@ -32,14 +32,18 @@ output_format = [otypes.DEPTH_POINTS_MASKED_AND_INDEXES,
                  otypes.MODEL_POINTS,
                  otypes.OBJECT_LABEL,
                  otypes.QUATERNION]
-
-model_checkpoint = os.path.join(dataset_path_prefix, "DenseFusion/trained_checkpoints/ycb/pose_model_26_0.012863246640872631.pth")
+#model_checkpoint = "/home/bokorn/src/DenseFusion/trained_models/ycb_rot/pose_model_8_0.04597038454019154.pth"
+model_checkpoint = "/home/bokorn/src/DenseFusion/trained_checkpoints/ycb/pose_model_grid_20_0.03136341443067263.pth"
+#model_checkpoint = os.path.join(dataset_path_prefix, "DenseFusion/trained_checkpoints/ycb/pose_model_26_0.012863246640872631.pth")
 
 num_objects = 21
 num_points = 1000
 
-estimator = PoseNet(num_points = num_points, num_obj = num_objects)
-estimator.load_state_dict(torch.load(model_checkpoint))
+# estimator = PoseNet(num_points = num_points, num_obj = num_objects)
+# estimator.load_state_dict(torch.load(model_checkpoint))
+# estimator.cuda()
+estimator = PoseNetGlobal(num_points = 1000, num_obj = 21)
+estimator.load_state_dict(torch.load(model_checkpoint, map_location=lambda storage, loc: storage))
 estimator.cuda()
 
 bins = np.load('/home/mengyunx/object_pose_utils/precomputed/vertices.npy')
@@ -60,6 +64,8 @@ for object_id in object_list:
         
         for i, data in enumerate(dataloader, 0):
             points, choose, img, target, model_points, idx, quat = data
+            if len(idx) == 0:
+                continue
             idx = idx - 1
             points, choose, img, target, model_points, idx = Variable(points).cuda(), \
                                                              Variable(choose).cuda(), \
@@ -73,6 +79,7 @@ for object_id in object_list:
 
             col = get_index(bins, quat[0])
             row = get_index(bins, pred_q)
+            #import IPython; IPython.embed()
             confusion_matrix[row, col] += 1
             if i % 100 == 0:
                 print("Image {0} / {1} has been processed".format(i, dataloader.__len__()))

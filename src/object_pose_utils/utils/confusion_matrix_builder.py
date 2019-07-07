@@ -34,6 +34,13 @@ class ConfMatrixEstimator(object):
         # Placeholder for the distribution estimated
         self.distribution = None
 
+        self.sigma_list = [8.383942118770577, 8.383942118770577, 4.007001106261114,
+                           5.040256718720126, 27.958217393726432, 2.335158406235891,
+                           9.417197731229585, 8.383942118770577, 5.040256718720126,
+                           4.007001106261114, 23.581276381216973, 11.089040431254809,
+                           0.6633157062106676, 5.040256718720126, 27.958217393726432,
+                           0.6633157062106676, 6.71209941874535, 0.6633157062106676,
+                           0.6633157062106676, 0.6633157062106676, 4.007001106261114]
         
     # Fit a distribution on the data given and set self.distribution to it
     def fit(self, data, trans):
@@ -41,9 +48,15 @@ class ConfMatrixEstimator(object):
         #        trans = camera transforms for transforming non-original frames into the original frame
 
         pre_transform_pred_q = []
+        trans_picked = []
         for i in range(0, len(data)):
             points, choose, img, target, model_points, idx, quat = data[i]
+            if len(idx) == 0:
+                continue
             idx = idx - 1
+
+            
+            
             points, choose, img, target, model_points, idx = Variable(points).cuda(), \
                                                              Variable(choose).cuda(), \
                                                              Variable(img).cuda(), \
@@ -55,25 +68,28 @@ class ConfMatrixEstimator(object):
             pred_q /= pred_q.norm()
 
             pre_transform_pred_q.append(pred_q)
-
+            trans_picked.append(trans[i])
             #if i % 100 == 0:
             #    print("Image {0} / {1} has been processedand added to the confusion matrix".format(i, dataloader.__len__()))
             #if i == 500:
             #    break
-        transformed_pose_list = applyTransform(pre_transform_pred_q, trans)
+        transformed_pose_list = applyTransform(pre_transform_pred_q, trans_picked)
         
         # Set the predicted pose of the original frame
         self.q_est = pre_transform_pred_q[0]
-
+        q_est_bin = self.get_index(self.q_est.unsqueeze(0).cpu().detach().numpy())
+        #print("q_est bin: {0}".format(q_est_bin))
         # Now fit a distribution on the original frame by combining all the transforms
         #import IPython; IPython.embed()
-        self.distribution = self.confusion_matrix[self.get_index(pre_transform_pred_q[0].unsqueeze(0).cpu().detach().numpy())].copy()
+        self.distribution = self.confusion_matrix[q_est_bin, :].copy()
+        #print("Place 1. {0}, {1}".format(np.sum(self.distribution), np.sum(self.confusion_matrix[self.get_index(pre_transform_pred_q[0].unsqueeze(0).cpu().detach().numpy()), :])))
 
         for i in range(1, len(transformed_pose_list)):
             transformed_pose = transformed_pose_list[i]
             index = self.get_index(transformed_pose)
             current_distribution = self.confusion_matrix[index, :]
             self.distribution += current_distribution
+            #print("Place 2. {0}".format(np.sum(self.distribution)))
             #import IPython; IPython.embed()
             
     # Return P(q | I_origin)
@@ -81,7 +97,7 @@ class ConfMatrixEstimator(object):
         # Input: q: a unit quaternion pose
 
         # Smoothing constant is added to every entry of the matrix so no entry will be 0
-        smoothing_constant = 1
+        smoothing_constant = 0.000001
         smoothed_distribution = self.distribution + np.ones(self.distribution.shape) * smoothing_constant
         index = self.get_index(q.unsqueeze(0).cpu().detach().numpy())
         lik = smoothed_distribution[index] / np.sum(smoothed_distribution)

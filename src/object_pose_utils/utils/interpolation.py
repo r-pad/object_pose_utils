@@ -61,7 +61,7 @@ class GaussianInterpolation(object):
         if(torch.cuda.is_available()):
             self.vertices = self.vertices.cuda()
         self.sigma = sigma
-        self.eta = gaussianNormC(sigma) 
+        self.eta = gaussianNormC(sigma).item() 
         self.setValues(values)
 
     def setValues(self, values, normalize = True):
@@ -89,11 +89,15 @@ class BinghamInterpolation(object):
         self.vertices = vertices
         Ms = []
         for v in self.vertices:
+            #import IPython; IPython.embed()
             Ms.append(makeBinghamM(v))
         M = torch.stack(Ms)
         Z = torch.cat([torch.zeros(1),-sigma.repeat(3)])
         self.eta = bingham_const(Z[1:]).float()
         Z = torch.diag(Z)
+        self.M = M
+        self.Z = Z
+        #import IPython; IPython.embed()
         self.MZMt = torch.bmm(torch.bmm(M, Z.repeat([len(Ms),1,1])), torch.transpose(M,2,1))
         if(torch.cuda.is_available()):
             self.MZMt = self.MZMt.cuda()
