@@ -70,6 +70,19 @@ class YcbVideoDataset(Dataset):
             current_index += self.interval
         return outputs_list
 
+    def getPaths(self, index):
+        # Input: index wrt local index in the specifide video
+        outputs_list = []
+        current_index = index
+        count = 0 
+        while current_index < len(self.index_list) and count < self.video_len:
+            global_index = self.index_list[current_index]
+            outputs_list.append(self.ycb_dataset.getPath(global_index))
+            count += 1
+            current_index += self.interval
+        return outputs_list
+
+
     def getCameraTransforms(self, index):
         transform_init = None
         transform_list = []

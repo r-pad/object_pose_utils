@@ -63,9 +63,15 @@ def rotatePoints(points, theta, meta_data):
     return points_rot
 
 class InplaneRotator(object):
+    def __init__(self, theta = None):
+        self.theta = theta
+
     def __call__(self, meta_data, img, depth, points, theta = None):
         if(theta is None):
-            theta = np.random.rand()*2.*np.pi
+            if(self.theta is None):
+                theta = np.random.rand()*2.*np.pi
+            else:
+                theta = self.theta
 
         meta_data = rotateMetaData(meta_data, theta)
         if(img is not None):

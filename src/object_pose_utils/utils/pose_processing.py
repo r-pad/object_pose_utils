@@ -12,6 +12,9 @@ from quat_math import (quatDiff,
                        quaternion_inverse,
                        quaternion_about_axis)
 
+from object_pose_utils.utils import to_np
+
+
 from functools import partial
 from itertools import product
 
@@ -57,7 +60,31 @@ def meanShift(pts, verts, weights, sigma=np.sqrt(2)*np.pi/4, eps_term = 1e-5, ma
             break;
         pts = new_pts
     return new_pts
-            
+
+def unique_tol(quats, tol = 0.001, **kwargs):
+    n = quats.shape[0]
+    d = tensorAngularAllDiffs(quats, quats) < tol
+    idx = torch.arange(n)
+    if torch.cuda.is_available():
+        idx = idx.cuda()
+    idx_all = torch.einsum("ab,b->ab", (d.float(), reversed(idx+1).float()))
+    indices = torch.argmax(idx_all, 1, keepdim=True).flatten()
+    u_idxs = indices == idx
+    quats_unique = quats[u_idxs,:]
+
+    if(len(kwargs)):
+        edge_idxs = [1]
+        while(len(edge_idxs)):
+            ret = np.unique(to_np(indices), **kwargs)
+            edge_idxs = set(ret[0]) - set(to_np(torch.nonzero(u_idxs.flatten()).flatten()))
+            for j in edge_idxs:
+                indices[indices==j] = indices[j]
+
+        #quats_unique = quats[ret[0],:]
+        return (quats_unique, *ret[1:])
+    else:
+        return quats_unique    
+
 def pose2Viewpoint(q):
     delta_quat = np.array([-.5,-.5,-.5,.5])    
     q_flip = quaternion_multiply(delta_quat, q.copy())
