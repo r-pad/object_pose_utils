@@ -1,4 +1,4 @@
-from object_pose_utils.utils.confusion_matrix_builder import ConfMatrixEstimator
+from object_pose_utils.utils.confusion_matrix_builder_mult import ConfMatrixEstimator
 from object_pose_utils.utils.temporal_filtering_framework import TempFilterEstimator
 import torch
 import numpy as np
@@ -23,9 +23,9 @@ def invalid_sample(data, video_len):
         points, choose, img, target, model_points, idx, quat = data[i]
         if len(idx) == 0:
             return True
+
     return False
-                                                    
-                                                    
+    
 def evaluate_estimator(estimator, obj_id, interval, video_len):
     dataset_root = '/home/mengyunx/DenseFusion/datasets/ycb/YCB_Video_Dataset/'
     mode = 'test'
@@ -59,28 +59,32 @@ def evaluate_estimator(estimator, obj_id, interval, video_len):
     
     ycb_video_dataset.setObjectId(obj_id)
     eval_result = {}
+    
     for v_id in ycb_video_dataset.getVideoIds():
         ycb_video_dataset.setVideoId(v_id)
     
-        dataloader = torch.utils.data.DataLoader(ycb_video_dataset, batch_size=1, shuffle=False, num_workers=20)
+        dataloader = torch.utils.data.DataLoader(ycb_video_dataset, batch_size=1, shuffle=False, num_workers=30)
     
         angular_error_list = []
         log_likelihood_list = []
+        
         for i, (data, trans) in enumerate(dataloader, 0):
             # In each video, for each subvideo, perform the evaluation
             points, choose, img, target, model_points, idx, quat = data[0]
             if invalid_sample(data, video_len):
-                print("Obj: {0}, Video: {1}, Subvideo: {2} gives nan.".format(str(obj_id), v_id, str(i)))
+                print("Obj: {0}, Video: {1}, Subvideo: {2} gives nans.".format(str(obj_id), v_id, str(i)))
                 angular_error_list.append(np.nan)
                 log_likelihood_list.append(np.nan)
                 continue
             
             q_gt = quat[0]
-                    
-            estimator.fit(data, trans)
 
+            estimator.fit(data, trans)
+           
             lik = estimator.likelihood(q_gt)
+            
             q_est = estimator.mode()
+            
 
             # Calculate angular error
             angular_error_degrees = to_np(tensorAngularDiff(torch.tensor(q_est).float().cuda(), quat.cuda()))*180/np.pi
@@ -97,8 +101,8 @@ def evaluate_estimator(estimator, obj_id, interval, video_len):
 
 #----- Evaluation code on Confusion Matrix -----
 obj_list = list(range(1,22))
-interval = 20
-video_len = 3
+interval = 0
+video_len = 1
 
 my_path = os.path.abspath(os.path.dirname(__file__))
 precomputed_path_prefix = os.path.join(my_path, "..", "precomputed")
@@ -106,12 +110,12 @@ precomputed_path_prefix = os.path.join(my_path, "..", "precomputed")
 err = {}
 lik = {}
 
-#result_file = open("val_conf_result.txt", "w") 
+#result_file = open("all_conf_result.txt", "w") 
 for obj_id in obj_list:
     err_dict = {}
     lik_dict = {}
     
-    conf_matrix = np.load(os.path.join(precomputed_path_prefix, "val_confusion_matrices", "{0}_confusion_matrix.npy".format(str(obj_id))))
+    conf_matrix = np.load(os.path.join(precomputed_path_prefix, "all_confusion_matrices", "{0}_confusion_matrix.npy".format(str(obj_id))))
     conf_matrix_estimator = ConfMatrixEstimator(conf_matrix)
     conf_matrix_eval_result = evaluate_estimator(conf_matrix_estimator, obj_id, interval, video_len)
 
@@ -121,14 +125,13 @@ for obj_id in obj_list:
         #avg_error = np.average(angular_error_list)
         #avg_lik = np.average(log_likelihood_list)
 
-        result_text = "Obj: {0}, Video: {1}, Done\n".format(str(obj_id), video_id)
-        
-        print(result_text)
-        #result_file.write(result_text)
         err_dict[video_id] = angular_error_list
         lik_dict[video_id] = log_likelihood_list
+        
+        result_text = "Obj: {0}, Video: {1}, Done.\n".format(str(obj_id), video_id)
+        print(result_text)
         
     err[obj_id] = err_dict
     lik[obj_id] = lik_dict
 #result_file.close()
-np.savez("val_conf_result_nan.npz", err=err, lik=lik)
+np.savez("single_conf_discrete_all_mode_mult.npz", err=err, lik=lik)

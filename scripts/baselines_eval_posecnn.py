@@ -1,5 +1,5 @@
 from object_pose_utils.utils.confusion_matrix_builder import ConfMatrixEstimator
-from object_pose_utils.utils.temporal_filtering_framework import TempFilterEstimator
+from object_pose_utils.utils.temporal_filtering_framework_posecnn import TempFilterEstimator
 import torch
 import numpy as np
 from dense_fusion.network import PoseNet
@@ -13,19 +13,32 @@ from generic_pose.utils import to_np
 import os.path
 from torch.autograd import Variable
 from object_pose_utils.utils.multi_view_utils import applyTransform, computeCameraTransform
-
+from transforms3d.quaternions import quat2mat, mat2quat
+import scipy.io as scio
 # Return True if the subvideo is not complete or has invalid data
 def invalid_sample(data, video_len):
     if len(data) < video_len:
         return True
-    
+
     for i in range(0, len(data)):
         points, choose, img, target, model_points, idx, quat = data[i]
         if len(idx) == 0:
             return True
     return False
-                                                    
-                                                    
+
+def getPoseCNNQuat(data, obj):
+    pose_idx = np.where(data['rois'][:,1].flatten()==obj)[0]
+    if(len(pose_idx) == 0):
+        #import IPython; IPython.embed()
+        return None
+    else:
+        pose_idx = pose_idx[0]
+        pose = data['poses'][pose_idx]
+        q = pose[:4][[1,2,3,0]]
+        q /= np.linalg.norm(q)
+        t = pose[4:7]
+        return q
+                                
 def evaluate_estimator(estimator, obj_id, interval, video_len):
     dataset_root = '/home/mengyunx/DenseFusion/datasets/ycb/YCB_Video_Dataset/'
     mode = 'test'
@@ -63,29 +76,59 @@ def evaluate_estimator(estimator, obj_id, interval, video_len):
         ycb_video_dataset.setVideoId(v_id)
     
         dataloader = torch.utils.data.DataLoader(ycb_video_dataset, batch_size=1, shuffle=False, num_workers=20)
-    
+
         angular_error_list = []
         log_likelihood_list = []
         for i, (data, trans) in enumerate(dataloader, 0):
             # In each video, for each subvideo, perform the evaluation
             points, choose, img, target, model_points, idx, quat = data[0]
+
+            # If any frame is invalid or the sample has < 3 length, skip evaluating the whole subvideo
             if invalid_sample(data, video_len):
-                print("Obj: {0}, Video: {1}, Subvideo: {2} gives nan.".format(str(obj_id), v_id, str(i)))
+                print("Obj: {0}, Video: {1}, Subvideo: {2} gives nans.".format(str(obj_id), v_id, str(i)))
                 angular_error_list.append(np.nan)
                 log_likelihood_list.append(np.nan)
                 continue
+
+            count = 0
+            return_nan = False
+            for path in ycb_video_dataset.getPaths(i):
+                pcnn_mat = scio.loadmat('{}/data/{}-posecnn.mat'.format(ycb_dataset.dataset_root, path))
+                tmp = getPoseCNNQuat(pcnn_mat, idx.item())
+
+                if tmp is None:
+                    #import IPython; IPython.embed()
+                    return_nan = True
+                    break
+                est_quat = torch.tensor(getPoseCNNQuat(pcnn_mat, idx.item())).float()
+                
+                data[count] = (data[count], est_quat)
+                count += 1
+
+            if return_nan:
+                print("Obj: {0}, Video: {1}, Subvideo: {2} gives nans.".format(str(obj_id), v_id, str(i)))
+                angular_error_list.append(np.nan)
+                log_likelihood_list.append(np.nan)
+                continue
+                
+            q_gt = quat[0]          
             
-            q_gt = quat[0]
-                    
             estimator.fit(data, trans)
 
-            lik = estimator.likelihood(q_gt)
+            lik = estimator.likelihood(q_gt.unsqueeze(0).cuda())
             q_est = estimator.mode()
 
             # Calculate angular error
             angular_error_degrees = to_np(tensorAngularDiff(torch.tensor(q_est).float().cuda(), quat.cuda()))*180/np.pi
             # Calculate log likelihood
             log_likelihood = np.log(lik)
+            
+            # --- for testing confusion matrix method
+            #if sum(estimator.confusion_matrix[bin_num]) > 0:
+                
+            #    print("Video: {0}, frame{1}, hit errors: {2};;; {3}".format(v_id, i, angular_error_degrees, log_likelihood))
+            #import IPython; IPython.embed()
+            # --- test ends
             
             angular_error_list.append(angular_error_degrees)
             log_likelihood_list.append(log_likelihood)
@@ -95,7 +138,7 @@ def evaluate_estimator(estimator, obj_id, interval, video_len):
         print("Video {0} is evaluated".format(v_id))
     return eval_result
 
-#----- Evaluation code on Confusion Matrix -----
+# ----- Evaluation code on Kalman Filter -----
 obj_list = list(range(1,22))
 interval = 20
 video_len = 3
@@ -106,29 +149,32 @@ precomputed_path_prefix = os.path.join(my_path, "..", "precomputed")
 err = {}
 lik = {}
 
-#result_file = open("val_conf_result.txt", "w") 
+#result_file = open("kalman_posecnn_result_nan.txt", "w")
 for obj_id in obj_list:
-    err_dict = {}
+
+    # ----- The below chunk is for the bingham method
+    
+    temp_filter_estimator_bingham = TempFilterEstimator()
+    temp_filter_eval_result_bingham = evaluate_estimator(temp_filter_estimator_bingham, obj_id, interval, video_len)
+
+    error_dict = {}
     lik_dict = {}
     
-    conf_matrix = np.load(os.path.join(precomputed_path_prefix, "val_confusion_matrices", "{0}_confusion_matrix.npy".format(str(obj_id))))
-    conf_matrix_estimator = ConfMatrixEstimator(conf_matrix)
-    conf_matrix_eval_result = evaluate_estimator(conf_matrix_estimator, obj_id, interval, video_len)
-
-    print("----- Evaluation result of the confusion matrix method -----")
-    for video_id, result in conf_matrix_eval_result.items():
+    print("----- Evaluation result of the temporal filtering with Bingham method -----")
+    for video_id, result in temp_filter_eval_result_bingham.items():
         angular_error_list, log_likelihood_list = result
         #avg_error = np.average(angular_error_list)
         #avg_lik = np.average(log_likelihood_list)
 
-        result_text = "Obj: {0}, Video: {1}, Done\n".format(str(obj_id), video_id)
-        
+        error_dict[video_id] = angular_error_list
+        lik_dict[video_id] = log_likelihood_list
+
+        result_text = "Obj: {0}, Video: {1}, Done".format(str(obj_id), video_id)
         print(result_text)
         #result_file.write(result_text)
-        err_dict[video_id] = angular_error_list
-        lik_dict[video_id] = log_likelihood_list
-        
-    err[obj_id] = err_dict
+
+    err[obj_id] = error_dict
     lik[obj_id] = lik_dict
 #result_file.close()
-np.savez("val_conf_result_nan.npz", err=err, lik=lik)
+np.savez("kalman_posecnn_result_nan.npz", err=err, lik=lik)
+    # ----- End of the bingham chunk

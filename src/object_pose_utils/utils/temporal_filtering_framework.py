@@ -61,9 +61,9 @@ class TempFilterEstimator(object):
             sigma_bingham = self.sigma_list[idx]
 
             points, choose, img, target, model_points, idx = Variable(points).cuda(), Variable(choose).cuda(), Variable(img).cuda(), Variable(target).cuda(), Variable(model_points).cuda(), Variable(idx).cuda()
-
+        
             pred_r, pred_t, pred_c, emb = pose_estimator(img, points, choose, idx)
-            
+        
             pred_q = pred_r[0,torch.argmax(pred_c)][[1,2,3,0]]
             
             pred_q /= pred_q.norm()

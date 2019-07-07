@@ -75,12 +75,14 @@ def makeBinghamM(q, q2 = None):
 
 def bingham_likelihood(M, Z, label, return_exponent = False):
     Z = Z.clamp(max=0, min=-1000)
-    eta = bingham_const(Z[1:]).float()
+    eta = bingham_const(torch.diag(Z[0])[1:]).float()
     if(torch.cuda.is_available()):
         eta = eta.cuda()
 
-    Z = torch.diag(Z)
-    MZMt = torch.bmm(torch.bmm(M, Z.repeat([1,1,1])), torch.transpose(M,2,1))
+    #Z = torch.diag(Z)
+    #MZMt = torch.bmm(torch.bmm(M, Z.repeat([1,1,1])), torch.transpose(M,2,1))
+    MZMt = torch.bmm(torch.bmm(M, Z), torch.transpose(M,2,1))
+    
     if(torch.cuda.is_available()):
         MZMt = MZMt.cuda()
     bingham_p = torch.mul(label.transpose(1,0).unsqueeze(2),

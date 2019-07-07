@@ -1,4 +1,4 @@
-from object_pose_utils.utils.confusion_matrix_builder import ConfMatrixEstimator
+from object_pose_utils.utils.confusion_matrix_builder_mult import ConfMatrixEstimator
 from object_pose_utils.utils.temporal_filtering_framework import TempFilterEstimator
 import torch
 import numpy as np
@@ -23,9 +23,9 @@ def invalid_sample(data, video_len):
         points, choose, img, target, model_points, idx, quat = data[i]
         if len(idx) == 0:
             return True
+
     return False
-                                                    
-                                                    
+    
 def evaluate_estimator(estimator, obj_id, interval, video_len):
     dataset_root = '/home/mengyunx/DenseFusion/datasets/ycb/YCB_Video_Dataset/'
     mode = 'test'
@@ -70,13 +70,14 @@ def evaluate_estimator(estimator, obj_id, interval, video_len):
             # In each video, for each subvideo, perform the evaluation
             points, choose, img, target, model_points, idx, quat = data[0]
             if invalid_sample(data, video_len):
-                print("Obj: {0}, Video: {1}, Subvideo: {2} gives nan.".format(str(obj_id), v_id, str(i)))
+                print("Obj: {0}, Video: {1}, Subvideo: {2} gives nans.".format(str(obj_id), v_id, str(i)))
                 angular_error_list.append(np.nan)
                 log_likelihood_list.append(np.nan)
                 continue
             
             q_gt = quat[0]
-                    
+
+            
             estimator.fit(data, trans)
 
             lik = estimator.likelihood(q_gt)
@@ -89,7 +90,7 @@ def evaluate_estimator(estimator, obj_id, interval, video_len):
             
             angular_error_list.append(angular_error_degrees)
             log_likelihood_list.append(log_likelihood)
-            if i % 100 == 0:
+            if i % 10 == 0:
                 print("Subvideo {0} has been evaluated".format(i))
         eval_result[v_id] = (angular_error_list, log_likelihood_list)
         print("Video {0} is evaluated".format(v_id))
@@ -106,12 +107,12 @@ precomputed_path_prefix = os.path.join(my_path, "..", "precomputed")
 err = {}
 lik = {}
 
-#result_file = open("val_conf_result.txt", "w") 
+#result_file = open("all_conf_result.txt", "w") 
 for obj_id in obj_list:
     err_dict = {}
     lik_dict = {}
     
-    conf_matrix = np.load(os.path.join(precomputed_path_prefix, "val_confusion_matrices", "{0}_confusion_matrix.npy".format(str(obj_id))))
+    conf_matrix = np.load(os.path.join(precomputed_path_prefix, "all_confusion_matrices", "{0}_confusion_matrix.npy".format(str(obj_id))))
     conf_matrix_estimator = ConfMatrixEstimator(conf_matrix)
     conf_matrix_eval_result = evaluate_estimator(conf_matrix_estimator, obj_id, interval, video_len)
 
@@ -121,14 +122,13 @@ for obj_id in obj_list:
         #avg_error = np.average(angular_error_list)
         #avg_lik = np.average(log_likelihood_list)
 
-        result_text = "Obj: {0}, Video: {1}, Done\n".format(str(obj_id), video_id)
-        
-        print(result_text)
-        #result_file.write(result_text)
         err_dict[video_id] = angular_error_list
         lik_dict[video_id] = log_likelihood_list
+        
+        result_text = "Obj: {0}, Video: {1}, Done.\n".format(str(obj_id), video_id)
+        print(result_text)
         
     err[obj_id] = err_dict
     lik[obj_id] = lik_dict
 #result_file.close()
-np.savez("val_conf_result_nan.npz", err=err, lik=lik)
+np.savez("all_conf_result_nan.npz", err=err, lik=lik)

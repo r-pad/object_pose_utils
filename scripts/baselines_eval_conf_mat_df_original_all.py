@@ -59,26 +59,32 @@ def evaluate_estimator(estimator, obj_id, interval, video_len):
     
     ycb_video_dataset.setObjectId(obj_id)
     eval_result = {}
+    
     for v_id in ycb_video_dataset.getVideoIds():
         ycb_video_dataset.setVideoId(v_id)
     
-        dataloader = torch.utils.data.DataLoader(ycb_video_dataset, batch_size=1, shuffle=False, num_workers=20)
+        dataloader = torch.utils.data.DataLoader(ycb_video_dataset, batch_size=1, shuffle=False, num_workers=0)
     
         angular_error_list = []
         log_likelihood_list = []
+        
         for i, (data, trans) in enumerate(dataloader, 0):
             # In each video, for each subvideo, perform the evaluation
             points, choose, img, target, model_points, idx, quat = data[0]
             if invalid_sample(data, video_len):
-                print("Obj: {0}, Video: {1}, Subvideo: {2} is skipped.".format(str(obj_id), v_id, str(i)))
+                print("Obj: {0}, Video: {1}, Subvideo: {2} gives nans.".format(str(obj_id), v_id, str(i)))
+                angular_error_list.append(np.nan)
+                log_likelihood_list.append(np.nan)
                 continue
+            
             q_gt = quat[0]
 
-            
             estimator.fit(data, trans)
-
+           
             lik = estimator.likelihood(q_gt)
+            
             q_est = estimator.mode()
+            
 
             # Calculate angular error
             angular_error_degrees = to_np(tensorAngularDiff(torch.tensor(q_est).float().cuda(), quat.cuda()))*180/np.pi
@@ -95,8 +101,8 @@ def evaluate_estimator(estimator, obj_id, interval, video_len):
 
 #----- Evaluation code on Confusion Matrix -----
 obj_list = list(range(1,22))
-interval = 20
-video_len = 3
+interval = 0
+video_len = 1
 
 my_path = os.path.abspath(os.path.dirname(__file__))
 precomputed_path_prefix = os.path.join(my_path, "..", "precomputed")
@@ -104,7 +110,7 @@ precomputed_path_prefix = os.path.join(my_path, "..", "precomputed")
 err = {}
 lik = {}
 
-result_file = open("all_conf_result.txt", "w") 
+#result_file = open("all_conf_result.txt", "w") 
 for obj_id in obj_list:
     err_dict = {}
     lik_dict = {}
@@ -116,15 +122,16 @@ for obj_id in obj_list:
     print("----- Evaluation result of the confusion matrix method -----")
     for video_id, result in conf_matrix_eval_result.items():
         angular_error_list, log_likelihood_list = result
-        avg_error = np.average(angular_error_list)
-        avg_lik = np.average(log_likelihood_list)
-        result_text = "Obj: {0}, Video: {1}, Avg. Angular Error (deg): {2}, Ave. Log Likelihood: {3}\n".format(str(obj_id), video_id, str(avg_error), str(avg_lik))
+        #avg_error = np.average(angular_error_list)
+        #avg_lik = np.average(log_likelihood_list)
+
+        err_dict[video_id] = angular_error_list
+        lik_dict[video_id] = log_likelihood_list
+        
+        result_text = "Obj: {0}, Video: {1}, Done.\n".format(str(obj_id), video_id)
         print(result_text)
-        result_file.write(result_text)
-        err_dict[video_id] = avg_error
-        lik_dict[video_id] = avg_lik
         
     err[obj_id] = err_dict
     lik[obj_id] = lik_dict
-result_file.close()
-np.savez("all_conf_result.npz", err=err, lik=lik)
+#result_file.close()
+np.savez("all_conf_result_nan.npz", err=err, lik=lik)
