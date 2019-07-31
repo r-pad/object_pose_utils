@@ -14,12 +14,13 @@ from object_pose_utils.datasets.uniform_ycb_dataset import UniformYCBDataset
 from object_pose_utils.datasets.ycb_dataset import YcbDataset as YCBDataset
 
 class FeatureDataset(YCBDataset):
-    def __init__(self, feature_root, num_augs = 0, *args, **kwargs):
+    def __init__(self, feature_root, num_augs = 0, feature_key = 'feat', *args, **kwargs):
         super(FeatureDataset, self).__init__(output_data = [], 
                                              *args, **kwargs)
 
         self.feature_root = feature_root
         self.num_augs = num_augs
+        self.feature_key = feature_key
 
     def __getitem__(self, index):
         try:
@@ -41,16 +42,17 @@ class FeatureDataset(YCBDataset):
 
         obj = torch.LongTensor([obj])
         quat = torch.from_numpy(data['quat'].astype(np.float32))
-        feat = torch.from_numpy(data['feat'].astype(np.float32))
+        feat = torch.from_numpy(data[self.feature_key].astype(np.float32))
         return obj, feat, quat
 
 class UniformFeatureDataset(UniformYCBDataset):
-    def __init__(self, feature_root, num_augs = 0, *args, **kwargs):
+    def __init__(self, feature_root, num_augs = 0, feature_key = 'feat', *args, **kwargs):
         super(UniformFeatureDataset, self).__init__(output_data = [], 
                                                     *args, **kwargs)
 
         self.feature_root = feature_root
         self.num_augs = num_augs
+        self.feature_key = feature_key
 
     def __getitem__(self, index):
         try:
@@ -70,5 +72,5 @@ class UniformFeatureDataset(UniformYCBDataset):
 
         obj = torch.LongTensor([self.object_label])
         quat = torch.from_numpy(data['quat'].astype(np.float32))
-        feat = torch.from_numpy(data['feat'].astype(np.float32))
+        feat = torch.from_numpy(data[self.feature_key].astype(np.float32))
         return obj, feat, quat

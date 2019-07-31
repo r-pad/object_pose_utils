@@ -110,13 +110,13 @@ CAMERA_MATRIX_OUTPUTS = set([OutputTypes.DEPTH_POINTS,
 
 def processImage(img, meta_data, output_type, 
                  remove_mask = True,
-                 background_fill = 255., 
+                 background_fill = 0.0, 
                  boarder_width = 0.0,
                  ):
     if(output_type in MASK_OUTPUTS):
         img = np.concatenate([img, np.expand_dims(meta_data['mask'], axis=2)], axis=2)
         if(background_fill is not None):
-            image = transparentOverlay(img, background_fill, remove_mask=remove_mask)
+            img = transparentOverlay(img, background_fill, remove_mask=remove_mask)
     if(output_type in BBOX_OUTPUTS):
         img, _ = cropBBox(img, meta_data['bbox'], boarder_width)
     return torch.from_numpy(np.transpose(img, (2,0,1)).astype(np.float32))
@@ -214,7 +214,7 @@ class PoseDataset(Dataset):
         self.preprocessors = preprocessors
         self.postprocessors = postprocessors
         self.REMOVE_MASK = True
-        self.background_fill = 255.0
+        self.background_fill = 0.0
         self.boarder_width = 0.0
         self.IMAGE_CONTAINS_MASK = False
         self.BBOX_FROM_MASK = False
@@ -264,7 +264,7 @@ class PoseDataset(Dataset):
                 elif(output_type is OutputTypes.OBJECT_LABEL):
                     outputs.append(torch.LongTensor([meta_data['object_label']]))
                 elif(output_type is OutputTypes.MASK):
-                    outputs.append(torch.LongTensor(meta_data['mask']))
+                    outputs.append(torch.LongTensor(meta_data['mask'].astype(np.uint8)))
                 elif(output_type is OutputTypes.BBOX):
                     outputs.append(torch.LongTensor(meta_data['bbox']))
                 else:

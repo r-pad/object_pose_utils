@@ -17,9 +17,11 @@ from object_pose_utils.datasets.ycb_dataset import YcbDataset as YCBDataset
 from object_pose_utils.datasets.ycb_dataset import get_bbox_label
 
 class UniformYCBDataset(YCBDataset):
-    def __init__(self, dataset_root, object_label, use_label_bbox = True, fill_with_exact = True,
+    def __init__(self, dataset_root, mode, object_label, use_label_bbox = True, fill_with_exact = True,
             *args, **kwargs):
         super(YCBDataset, self).__init__(*args, **kwargs)
+
+        self.add_val = 'valid' in mode
         self.dataset_root = dataset_root
         self.use_label_bbox = use_label_bbox
         self.minimum_num_pts = 50
@@ -59,6 +61,12 @@ class UniformYCBDataset(YCBDataset):
         with open(os.path.join(self.dataset_root, 'image_sets', 'binded_files.pkl'), 'rb') as f:
             data = pickle.load(f)
             self.tetra_bins = data['tetra_bins'][object_label]
+        if(self.add_val):
+            with open(os.path.join(self.dataset_root, 'image_sets', 'binded_files_valid.pkl'), 'rb') as f:
+                val_data = pickle.load(f)
+                val_bins = val_data['tetra_bins'][object_label]
+                for k in range(len(self.tetra_bins)):
+                    self.tetra_bins[k].extend(val_bins[k])
 
     def getPath(self, index):
         if(len(self.tetra_bins[index])):
@@ -77,6 +85,7 @@ class UniformYCBDataset(YCBDataset):
     ### Should return dictionary containing {transform_mat, object_label}
     # Optionally containing {mask, bbox, camera_scale, camera_cx, camera_cy, camera_fx, camera_fy}
     def getMetaData(self, index, mask=False, bbox=False, camera_matrix=False):
+        sub_path = '../' + self.getPath(index)
         syn_data = sub_path[:13] == 'depth_renders'  
 
         returned_dict = {}

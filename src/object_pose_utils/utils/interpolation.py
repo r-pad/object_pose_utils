@@ -33,8 +33,8 @@ class TetraInterpolation(object):
     def baryTetraTransform(self, t_id):
         return np.linalg.inv(np.vstack(self.kd_grid.grid.GetTetrahedron(t_id, self.level).vertices).T)
 
-    def smooth(self, q):
-        kd_dist, idxs = self.kd_grid.query(q, k=4)
+    def smooth(self, q, k=4):
+        kd_dist, idxs = self.kd_grid.query(q, k=k)
         return (self.values[idxs]*kd_dist).sum(axis=1)/(kd_dist.sum(axis=1))
 
     def __call__(self, q):
@@ -79,7 +79,7 @@ class GaussianInterpolation(object):
         return torch.mm(K, self.values.t()).flatten()
 
 class BinghamInterpolation(object):
-    def __init__(self, vertices, values, sigma=np.pi/9):
+    def __init__(self, vertices, values = None, sigma=np.pi/9):
         if(type(vertices) is not torch.Tensor):
             vertices = torch.tensor(vertices).float()
 
@@ -91,14 +91,19 @@ class BinghamInterpolation(object):
         for v in self.vertices:
             Ms.append(makeBinghamM(v))
         M = torch.stack(Ms)
-        Z = torch.cat([torch.zeros(1),-sigma.repeat(3)])
+        zeros = torch.zeros(1)
+        if(vertices.is_cuda):
+            zeros = zeros.cuda()
+        Z = torch.cat([zeros,-sigma.repeat(3)])
         self.eta = bingham_const(Z[1:]).float()/2.0
         Z = torch.diag(Z)
         self.MZMt = torch.bmm(torch.bmm(M, Z.repeat([len(Ms),1,1])), torch.transpose(M,2,1))
         if(torch.cuda.is_available()):
             self.MZMt = self.MZMt.cuda()
             self.eta = self.eta.cuda()
-        self.setValues(values)
+
+        if(values is not None):
+            self.setValues(values)
 
     def setValues(self, values):
         self.values = values/values.sum()
