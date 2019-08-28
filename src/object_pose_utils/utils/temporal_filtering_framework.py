@@ -19,13 +19,17 @@ class TempFilterEstimator(object):
     def __init__(self, M=None, Z=None):
         self.M = M
         self.Z = Z
-        self.sigma_list = [8.383942118770577, 8.383942118770577, 4.007001106261114,
-                           5.040256718720126, 27.958217393726432, 2.335158406235891,
-                           9.417197731229585, 8.383942118770577, 5.040256718720126,
-                           4.007001106261114, 23.581276381216973, 11.089040431254809,
-                           0.6633157062106676, 5.040256718720126, 27.958217393726432,
-                           0.6633157062106676, 6.71209941874535, 0.6633157062106676,
-                           0.6633157062106676, 0.6633157062106676, 4.007001106261114]
+        #self.sigma_list = [8.383942118770577, 8.383942118770577, 4.007001106261114,
+        #                   5.040256718720126, 27.958217393726432, 2.335158406235891,
+        #                   9.417197731229585, 8.383942118770577, 5.040256718720126,
+        #                   4.007001106261114, 23.581276381216973, 11.089040431254809,
+        #                   0.6633157062106676, 5.040256718720126, 27.958217393726432,
+        #                   0.6633157062106676, 6.71209941874535, 0.6633157062106676,
+        #                   0.6633157062106676, 0.6633157062106676, 4.007001106261114]
+        self.sigma_list = np.load('precomputed/max_sigma_list.npy')
+        print("--- Sigma max used --- ")
+        #self.sigma_list = np.load('../../../precomputed/every_sigma_list.npy')
+        
     def fit(self, data, trans):
         pre_transform_pred_q = []
         trans_picked = []
@@ -115,7 +119,7 @@ class TempFilterEstimator(object):
         return self.M[:, 0]
 
     def likelihood(self, q):
-        return bingham_likelihood(self.M.unsqueeze(0), self.Z.unsqueeze(0), q)
+        return bingham_likelihood(self.M.unsqueeze(0), self.Z.unsqueeze(0), q)*2
 
     def add(self, M, Z):
         first_part = torch.mm(torch.mm(self.M, self.Z), self.M.transpose(0,1))

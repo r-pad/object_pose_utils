@@ -136,5 +136,5 @@ for obj_id in obj_list:
     err[obj_id] = error_dict
     lik[obj_id] = lik_dict
 #result_file.close()
-np.savez("kalman_df_4_3.npz", err=err, lik=lik)
-    # ----- End of the bingham chunk
+np.savez("kalman_df_4_3_mixed_sigma_max.npz", err=err, lik=lik)
+# ----- End of the bingham chunk
