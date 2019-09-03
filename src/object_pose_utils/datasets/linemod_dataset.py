@@ -6,7 +6,9 @@ from PIL import Image
 import yaml
 
 class LinemodDataset(PoseDataset):
-    def __init__(self, dataset_root, mode, object_list):
+    def __init__(self, dataset_root, mode, object_list, segnet_mask = False,
+                 *args, **kwargs):
+        super(LinemodDataset, self).__init__(*args, **kwargs)
         self.mode = mode
         self.dataset_root = dataset_root
         self.object_list = object_list
@@ -18,7 +20,7 @@ class LinemodDataset(PoseDataset):
         self.num_pt_mesh_small = 500
         self.list_rank = []
         self.meta = {}
-
+        self.object_labels = [1,2,4,5,6,8,9,10,11,12,13,14,15]
         txt_list = []
         if self.mode == "train":
             for item in object_list: # txt list will be (obj1, obj1, obj1,...,obj2, obj2, obj2,...)
@@ -47,7 +49,7 @@ class LinemodDataset(PoseDataset):
                     input_line = input_line[:-1]
                 self.list_rgb.append('{0}/data/{1}/rgb/{2}.png'.format(self.dataset_root, '%02d' % item, input_line))
                 self.list_depth.append('{0}/data/{1}/depth/{2}.png'.format(self.dataset_root, '%02d' % item, input_line))
-                if self.mode == 'eval':
+                if self.mode == 'eval' or segnet_mask:
                     self.list_label.append('{0}/segnet_results/{1}_label/{2}_label.png'.format(self.dataset_root, '%02d' % item, input_line))
                 else:
                     self.list_label.append('{0}/data/{1}/mask/{2}.png'.format(self.dataset_root, '%02d' % item, input_line))
@@ -60,18 +62,15 @@ class LinemodDataset(PoseDataset):
         #print("linemod: {0}".format(item_count))
         image_size = np.array(Image.open(self.list_rgb[0])).shape
 
-        super(LinemodDataset, self).__init__(image_size)
-
     def getDepthImage(self, index):
         path = self.list_depth[index]
-        image = np.array(Image.open(path))
-        return [image]
+        image = np.array(Image.open(path))/1000
+        return image
 
     def getImage(self, index):
         path = self.list_rgb[index]
         image = np.array(Image.open(path))
-        print(image)
-        return [image]
+        return image
 
     def getModelPoints(self, object_label):
         model_points = self.pt[object_label] / 1000.0
@@ -104,25 +103,25 @@ class LinemodDataset(PoseDataset):
 
         transform_mat = np.identity(4)
         transform_mat[:3, :3] = target_r
-        transform_mat[:3, 3] = target_t
+        transform_mat[:3, 3] = target_t/1000.0
 
         returned_dict['transform_mat'] = transform_mat
 
         if mask:
             path = self.list_depth[index]
-            depth = np.array(Image.open(path))
+            depth = self.getDepthImage(index)
+            label = np.array(Image.open(self.list_label[index]))
+            if(len(label.shape) > 2):
+                label = label[:,:,0]
 
-            mask_depth = ma.getmaskarray(ma.masked_not_equal(self.depth, 0))
-            if self.mode == 'eval':
-                mask_label = ma.getmaskarray(ma.masked_equal(self.list_label[index], np.array(255)))
-            else:
-                mask_label = ma.getmaskarray(ma.masked_equal(self.list_label[index], np.array([255, 255, 255])))[:, :, 0]
+            mask_depth = ma.getmaskarray(ma.masked_not_equal(depth, 0))
+            mask_label = ma.getmaskarray(ma.masked_equal(label, np.array(255)))
 
             mask = mask_label * mask_depth
             returned_dict['mask'] = mask
 
         if bbox: # needs to return x,y,w,h
-            bbox = meta['obj_bb']
+            bbox = get_bbox(meta['obj_bb'])
             returned_dict['bbox'] = bbox
 
         if camera_matrix:
@@ -132,7 +131,7 @@ class LinemodDataset(PoseDataset):
             returned_dict['camera_fx'] = 572.41140
             returned_dict['camera_fy'] = 573.57043
 
-        return [returned_dict]
+        return returned_dict
 
 
     def ply_vtx(self,path):
@@ -150,3 +149,52 @@ class LinemodDataset(PoseDataset):
 
     def __len__(self):
         return len(self.list_rgb)
+
+    
+border_list = [-1, 40, 80, 120, 160, 200, 240, 280, 320, 360, 400, 440, 480, 520, 560, 600, 640, 680]
+img_width = 480
+img_length = 640
+
+def get_bbox(bbox):
+    bbx = [bbox[1], bbox[1] + bbox[3], bbox[0], bbox[0] + bbox[2]]
+    if bbx[0] < 0:
+        bbx[0] = 0
+    if bbx[1] >= 480:
+        bbx[1] = 479
+    if bbx[2] < 0:
+        bbx[2] = 0
+    if bbx[3] >= 640:
+        bbx[3] = 639                
+    rmin, rmax, cmin, cmax = bbx[0], bbx[1], bbx[2], bbx[3]
+    r_b = rmax - rmin
+    for tt in range(len(border_list)):
+        if r_b > border_list[tt] and r_b < border_list[tt + 1]:
+            r_b = border_list[tt + 1]
+            break
+    c_b = cmax - cmin
+    for tt in range(len(border_list)):
+        if c_b > border_list[tt] and c_b < border_list[tt + 1]:
+            c_b = border_list[tt + 1]
+            break
+    center = [int((rmin + rmax) / 2), int((cmin + cmax) / 2)]
+    rmin = center[0] - int(r_b / 2)
+    rmax = center[0] + int(r_b / 2)
+    cmin = center[1] - int(c_b / 2)
+    cmax = center[1] + int(c_b / 2)
+    if rmin < 0:
+        delt = -rmin
+        rmin = 0
+        rmax += delt
+    if cmin < 0:
+        delt = -cmin
+        cmin = 0
+        cmax += delt
+    if rmax > 480:
+        delt = rmax - 480
+        rmax = 480
+        rmin -= delt
+    if cmax > 640:
+        delt = cmax - 640
+        cmax = 640
+        cmin -= delt
+    return cmin, rmin, cmax-cmin, rmax-rmin
