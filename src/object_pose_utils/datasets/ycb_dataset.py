@@ -23,6 +23,7 @@ class YcbDataset(PoseDataset):
                  background_files = None,
                  add_syn_noise = True,
                  refine = False,
+                 use_posecnn_data = False,
                  *args, **kwargs):
         super(YcbDataset, self).__init__(*args, **kwargs)
         self.mode = mode
@@ -39,6 +40,7 @@ class YcbDataset(PoseDataset):
         self.add_syn_background = add_syn_background
         self.add_syn_noise = add_syn_noise
         self.refine = refine
+        self.use_posecnn_data = use_posecnn_data
         self.classes = ['__background__']
 
         self.cam_cx_1 = 312.9869
@@ -151,6 +153,10 @@ class YcbDataset(PoseDataset):
 
                 image_file.close()
 
+        self.points = {}
+        for item in object_list:
+            self.points[item] = self.loadModelPoints(item)
+                
     def getPath(self, index):
         return self.image_list[index][0]
 
@@ -202,13 +208,18 @@ class YcbDataset(PoseDataset):
         transform_mat[:3, 3] = target_t
 
         returned_dict['transform_mat'] = transform_mat
+        posecnn_meta = None
         if mask or (bbox and self.use_label_bbox):
             obj = meta['cls_indexes'].flatten().astype(np.int32)
             depth = self.getDepthImage(index)
             sub_path = self.image_list[index][0]
-            path = '{0}/data/{1}-label.png'.format(self.dataset_root, sub_path)
-            label = np.array(Image.open(path))
-            
+            if(not self.use_posecnn_data or (index >= self.len_real and index < self.len_grid)):
+                path = '{0}/data/{1}-label.png'.format(self.dataset_root, sub_path)
+                label = np.array(Image.open(path))
+            else:
+                posecnn_meta = scio.loadmat('{0}/data/{1}-posecnn.mat'.format(self.dataset_root, sub_path))
+                label = np.array(posecnn_meta['labels'])
+
             mask_depth = ma.getmaskarray(ma.masked_not_equal(depth, 0))
             mask_label = ma.getmaskarray(ma.masked_equal(label, self.list_obj[index]))
             mask = mask_label * mask_depth
@@ -223,10 +234,11 @@ class YcbDataset(PoseDataset):
             
             returned_dict['mask'] = mask
         if bbox:  # needs to return x,y,w,h
-            if(self.use_label_bbox or (index >= self.len_real and index < self.len_grid)):
+            if(not self.use_posecnn_data or self.use_label_bbox or (index >= self.len_real and index < self.len_grid)):
                 bbox = get_bbox_label(mask_label, image_size = self.image_size)
             else:
-                posecnn_meta = scio.loadmat('{0}/data/{1}-posecnn.mat'.format(self.dataset_root, sub_path))
+                if(posecnn_meta is None):
+                    posecnn_meta = scio.loadmat('{0}/data/{1}-posecnn.mat'.format(self.dataset_root, sub_path))
                 obj_idx = np.nonzero(posecnn_meta['rois'][:,1].astype(int) == object_label)[0]
                 if(len(obj_idx) == 0):
                     raise PoseDataError('Object {} not in PoseCNN ROIs {}'.format(object_label, sub_path))
@@ -257,9 +269,11 @@ class YcbDataset(PoseDataset):
 
         return returned_dict
 
+    def getModelPoints(self, object_label):
+        return self.points[object_label]
 
     # Note: object_label here needs to be consistent to the object label returned in getMetaData
-    def getModelPoints(self, object_label):
+    def loadModelPoints(self, object_label):
         object_name = self.classes[object_label]
 
         input_file = open('{0}/models/{1}/points.xyz'.format(self.dataset_root, object_name))
