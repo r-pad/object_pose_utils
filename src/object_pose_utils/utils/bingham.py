@@ -28,14 +28,15 @@ class BinghamConst(torch.autograd.Function):
             #dF = bingham_dF(Z)
             # Not sure if this always prevents the NANs? Need to check
             #z_i = np.argsort(Z)
-            #dF = np.array(bingham_dF(Z[z_i]))
+            dF = bingham_dF(np.sort(Z))
+            dF = dF[np.argsort(np.argsort(Z))]
             #dF[z_i] = dF
             
-            for p in perms:
-                p = list(p)
-                dF = np.array(bingham_dF(Z[p]))[np.argsort(p)]
-                if(not np.any(np.isnan(dF))):
-                    break
+            #for p in perms:
+            #    p = list(p)
+            #    dF = np.array(bingham_dF(Z[p]))[np.argsort(p)]
+            #    if(not np.any(np.isnan(dF))):
+            #        break
 
             if(np.any(np.isnan(dF))):
                 print('BinghamConst: Gradient NaN')

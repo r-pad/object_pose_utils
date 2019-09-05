@@ -27,15 +27,16 @@ class TetraInterpolation(object):
             self.setValues(values)
 
     def setValues(self, values):
-        eta = np.abs(values).sum()*(np.pi**2)/values.shape[0]
-        self.values = 1./eta * values
+        eta = np.abs(values).sum()*(np.pi**2)/len(values)
+        self.values = 1./eta * values.flatten()
 
     def baryTetraTransform(self, t_id):
         return np.linalg.inv(np.vstack(self.kd_grid.grid.GetTetrahedron(t_id, self.level).vertices).T)
 
-    def smooth(self, q, k=4):
+    def smooth(self, q, k=4, esp = 1e-9):
         kd_dist, idxs = self.kd_grid.query(q, k=k)
-        return (self.values[idxs]*kd_dist).sum(axis=1)/(kd_dist.sum(axis=1))
+        inv_dist = 1./(kd_dist + esp)
+        return (self.values[idxs]*inv_dist).sum(axis=1)/(inv_dist.sum(axis=1))
 
     def __call__(self, q):
         t_id = self.kd_grid.containingTetraFast(q)
