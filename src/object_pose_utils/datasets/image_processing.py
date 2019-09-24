@@ -11,14 +11,14 @@ from PIL import Image
 from object_pose_utils.datasets.pose_dataset import IMAGE_OUTPUTS
 
 
-norm = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
 
 class ImageNormalizer(object):
     def __call__(self, outputs, meta_data, output_types):
         res = []
         for x, ot in zip(outputs, output_types):
             if(ot in IMAGE_OUTPUTS):
-                x = norm(x)
+                x = normalize(x)
             res.append(x)
         return res
 
