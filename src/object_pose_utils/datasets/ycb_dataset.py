@@ -251,9 +251,11 @@ class YcbDataset(PoseDataset):
 
             #TODO: figure out how to handle when the valid labels are smaller than minimum size required
             if len(mask.nonzero()[0]) <= self.minimum_num_pts:
+                pass # temperally ignored for BOP testing
 
-                raise PoseDataError('Mask {} has less than minimum number of pixels ({} < {})'.format(
-                    sub_path, len(mask.nonzero()[0]), self.minimum_num_pts))
+                # raise PoseDataError('Mask {} has less than minimum number of pixels ({} < {})'.format(
+                #     sub_path, len(mask.nonzero()[0]), self.minimum_num_pts))
+
                 #while 1:
                     #pass
 
