@@ -1,11 +1,12 @@
 import numpy as np
 import cv2
 
-with open('{0}/image_sets/classes.txt'.format(dataset_root)) as f:
-    classes = f.read().split()
-classes.insert(0, '__background__')
-    
+   
 def load_grid_data(dataset_root, grid_indices, obj):   
+    with open('{0}/image_sets/classes.txt'.format(dataset_root)) as f:
+        classes = f.read().split()
+    classes.insert(0, '__background__')
+    
     filename_format = '{}/depth_renders/{}/'.format(dataset_root, classes[obj]) + '{:04d}-{}.{}'
 
     images = []
