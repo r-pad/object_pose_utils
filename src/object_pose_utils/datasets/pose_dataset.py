@@ -47,14 +47,16 @@ class OutputTypes(Enum):
     DEPTH_POINTS_MASKED = 19
     DEPTH_POINTS_AND_INDEXES = 20
     DEPTH_POINTS_MASKED_AND_INDEXES = 21
+    # For BOP challenge usage
+    SCENE_IM_ID = 22
 
-IMAGE_OUTPUTS = set([OutputTypes.IMAGE, 
-                    OutputTypes.IMAGE_MASKED, 
-                    OutputTypes.IMAGE_CROPPED, 
+IMAGE_OUTPUTS = set([OutputTypes.IMAGE,
+                    OutputTypes.IMAGE_MASKED,
+                    OutputTypes.IMAGE_CROPPED,
                     OutputTypes.IMAGE_MASKED_CROPPED]
                     )
 DEPTH_OUTPUTS = set([OutputTypes.DEPTH_IMAGE,
-                    OutputTypes.DEPTH_IMAGE_MASKED, 
+                    OutputTypes.DEPTH_IMAGE_MASKED,
                     OutputTypes.DEPTH_IMAGE_CROPPED,
                     OutputTypes.DEPTH_IMAGE_MASKED_CROPPED,
                     OutputTypes.DEPTH_POINTS,
@@ -63,7 +65,7 @@ DEPTH_OUTPUTS = set([OutputTypes.DEPTH_IMAGE,
                     OutputTypes.DEPTH_POINTS_MASKED_AND_INDEXES]
                     )
 DEPTH_IMAGE_OUTPUTS = set([OutputTypes.DEPTH_IMAGE,
-                           OutputTypes.DEPTH_IMAGE_MASKED, 
+                           OutputTypes.DEPTH_IMAGE_MASKED,
                            OutputTypes.DEPTH_IMAGE_CROPPED,
                            OutputTypes.DEPTH_IMAGE_MASKED_CROPPED]
                            )
@@ -83,19 +85,19 @@ TRANSFORM_OUTPUTS = set([OutputTypes.TRANSFORM_MATRIX,
                         OutputTypes.QUATERNION,
                         OutputTypes.TRANSLATION]
                         )
-MASK_OUTPUTS = set([OutputTypes.MASK, 
-                   OutputTypes.IMAGE_MASKED, 
-                   OutputTypes.IMAGE_MASKED_CROPPED, 
-                   OutputTypes.DEPTH_IMAGE_MASKED, 
-                   OutputTypes.DEPTH_IMAGE_MASKED_CROPPED, 
+MASK_OUTPUTS = set([OutputTypes.MASK,
+                   OutputTypes.IMAGE_MASKED,
+                   OutputTypes.IMAGE_MASKED_CROPPED,
+                   OutputTypes.DEPTH_IMAGE_MASKED,
+                   OutputTypes.DEPTH_IMAGE_MASKED_CROPPED,
                    OutputTypes.DEPTH_POINTS_MASKED,
                    OutputTypes.DEPTH_POINTS_MASKED_AND_INDEXES]
                    )
 
-BBOX_OUTPUTS = set([OutputTypes.BBOX, 
-                   OutputTypes.IMAGE_CROPPED, 
-                   OutputTypes.IMAGE_MASKED_CROPPED, 
-                   OutputTypes.DEPTH_IMAGE_CROPPED, 
+BBOX_OUTPUTS = set([OutputTypes.BBOX,
+                   OutputTypes.IMAGE_CROPPED,
+                   OutputTypes.IMAGE_MASKED_CROPPED,
+                   OutputTypes.DEPTH_IMAGE_CROPPED,
                    OutputTypes.DEPTH_IMAGE_MASKED_CROPPED,
                    OutputTypes.DEPTH_POINTS_MASKED,
                    OutputTypes.DEPTH_POINTS_MASKED_AND_INDEXES]
@@ -108,9 +110,9 @@ CAMERA_MATRIX_OUTPUTS = set([OutputTypes.DEPTH_POINTS,
                             )
 
 
-def processImage(img, meta_data, output_type, 
+def processImage(img, meta_data, output_type,
                  remove_mask = True,
-                 background_fill = 0.0, 
+                 background_fill = 0.0,
                  boarder_width = 0.0,
                  ):
     if(output_type in MASK_OUTPUTS):
@@ -121,7 +123,7 @@ def processImage(img, meta_data, output_type,
         img, _ = cropBBox(img, meta_data['bbox'], boarder_width)
     return torch.from_numpy(np.transpose(img, (2,0,1)).astype(np.float32))
 
-def processDepthImage(depth, meta_data, output_type, 
+def processDepthImage(depth, meta_data, output_type,
                       num_points = 1000,
                       boarder_width = 0.0,
                       ):
@@ -148,7 +150,7 @@ def processDepthImage(depth, meta_data, output_type,
             choose = np.pad(choose, (0, num_points - len(choose)), 'wrap')
         else:
             raise PoseDataError('No points in mask')
-        
+
         depth_choose = depth.flatten()[choose][:, np.newaxis].astype(np.float32)
         xmap_choose = xmap.flatten()[choose][:, np.newaxis].astype(np.float32)
         ymap_choose = ymap.flatten()[choose][:, np.newaxis].astype(np.float32)
@@ -176,7 +178,7 @@ def processModelPoints(points, meta_data, output_type):
         points = np.add(np.dot(points, R.T), t)
     return torch.from_numpy(points.astype(np.float32))
 
-def processTransform(meta_data, output_type): 
+def processTransform(meta_data, output_type):
     if(output_type is OutputTypes.ROTATION_MATRIX):
         return torch.from_numpy(meta_data['transform_mat'][:3,:3].astype(np.float32))
     if(output_type is OutputTypes.QUATERNION):
@@ -189,7 +191,7 @@ def processTransform(meta_data, output_type):
 
 
 class PoseDataset(Dataset):
-    def __init__(self, 
+    def __init__(self,
                  output_data = [
                                 OutputTypes.IMAGE_CROPPED,
                                 #OutputTypes.QUATERNION,
@@ -204,13 +206,13 @@ class PoseDataset(Dataset):
         self.image_size = image_size
         self.output_data = output_data
         self.output_types = set(output_data)
-        
+
         self.output_data_buffered = []
         for ot in self.output_data:
             self.output_data_buffered.append(ot)
             if(ot in POINT_INDEX_OUTPUTS):
                 self.output_data_buffered.append(None)
-        
+
         self.preprocessors = preprocessors
         self.postprocessors = postprocessors
         self.REMOVE_MASK = True
@@ -222,7 +224,7 @@ class PoseDataset(Dataset):
         self.resample_on_error = resample_on_error
 
     def __getitem__(self, index):
-        outputs = [] 
+        outputs = []
         need_mask = not self.IMAGE_CONTAINS_MASK and len(self.output_types & MASK_OUTPUTS) > 0
         need_bbox = not self.BBOX_FROM_MASK and len(self.output_types & BBOX_OUTPUTS) > 0
         need_camera_matrix = len(self.output_types & CAMERA_MATRIX_OUTPUTS) >  0
@@ -267,6 +269,8 @@ class PoseDataset(Dataset):
                     outputs.append(torch.LongTensor(meta_data['mask'].astype(np.uint8)))
                 elif(output_type is OutputTypes.BBOX):
                     outputs.append(torch.LongTensor(meta_data['bbox']))
+                elif(output_type is OutputTypes.SCENE_IM_ID):
+                    outputs.append((meta_data['scene_id'], meta_data['im_id']))
                 else:
                     raise ValueError('Invalid Output Type {}'.format(output_type))
         except PoseDataError as e:
@@ -278,7 +282,7 @@ class PoseDataset(Dataset):
 
         for postproc in self.postprocessors:
             outputs = postproc(outputs, meta_data, self.output_data_buffered)
-            
+
         return tuple(outputs)
     def getDepthImage(self, index):
         raise NotImplementedError('getDepthImage must be implemented by child classes')
@@ -289,10 +293,9 @@ class PoseDataset(Dataset):
     # Optionally containing {mask, bbox, camera_scale, camera_cx, camera_cy, camera_fx, camera_fy}
     def getMetaData(self, index, mask=False, bbox=False, camera_matrix=False):
         raise NotImplementedError('getModelPoints must be implemented by child classes')
-    
+
     def getModelPoints(self, object_label):
         raise NotImplementedError('getModelPoints must be implemented by child classes')
-    
+
     def __len__(self):
         raise NotImplementedError('__len__ must be implemented by child classes')
-

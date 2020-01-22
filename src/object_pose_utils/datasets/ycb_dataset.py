@@ -16,14 +16,18 @@ import os
 from object_pose_utils.datasets.pose_dataset import PoseDataError
 from object_pose_utils.datasets.image_processing import get_bbox_label
 
+# For the BOP test set
+import json
+
 class YcbDataset(PoseDataset):
-    def __init__(self, dataset_root, mode, object_list, 
-                 use_label_bbox = True, grid_size = 3885, 
+    def __init__(self, dataset_root, mode, object_list,
+                 use_label_bbox = True, grid_size = 3885,
                  add_syn_background = True,
                  background_files = None,
                  add_syn_noise = True,
                  refine = False,
                  use_posecnn_data = False,
+                 bop_file_path = None,
                  *args, **kwargs):
         super(YcbDataset, self).__init__(*args, **kwargs)
         self.mode = mode
@@ -95,7 +99,7 @@ class YcbDataset(PoseDataset):
                     self.list_obj.append(item)
                 image_file.close()
         self.len_syn = len(self.image_list)
-        
+
         if 'grid' in mode:
             num_digits = len(str(grid_size))
             for item in object_list:
@@ -135,7 +139,7 @@ class YcbDataset(PoseDataset):
                     self.image_list.append((image_line, item))
                     self.list_obj.append(item)
 
-                image_file.close()                               
+                image_file.close()
 
         if mode == 'test':
             for item in object_list:
@@ -151,12 +155,27 @@ class YcbDataset(PoseDataset):
                     self.image_list.append((image_line, item))
                     self.list_obj.append(item)
 
+
                 image_file.close()
+
+        if mode == 'bop_test':
+            if bop_file_path is None:
+                raise PoseDataError("bop_file_path must be provided in bop_test mode")
+            with open(bop_file_path) as bop_file:
+                bop_target = json.load(bop_file)
+            self.bop_target = [_ for _ in bop_target if _['obj_id'] in object_list]
+            for row in self.bop_target:
+                im_id = row['im_id']
+                inst_count = row['inst_count']
+                obj_id = row['obj_id']
+                scene_id = row['scene_id']
+                self.image_list.append(("%04d/%06d" % (scene_id, im_id), obj_id))
+                self.list_obj.append(obj_id)
 
         self.points = {}
         for item in object_list:
             self.points[item] = self.loadModelPoints(item)
-                
+
     def getPath(self, index):
         return self.image_list[index][0]
 
@@ -174,7 +193,7 @@ class YcbDataset(PoseDataset):
             mask = image[:,:,3:]
         image = image[:,:,:3]
         if(index >= self.len_real and index < self.len_grid):
-            if(self.add_syn_background): 
+            if(self.add_syn_background):
                 label = np.expand_dims(np.array(Image.open('{0}/data/{1}-label.png'.format(self.dataset_root, sub_path))), 2)
                 mask_back = ma.getmaskarray(ma.masked_equal(label, 0))
                 back_filename = random.choice(self.background)
@@ -182,7 +201,7 @@ class YcbDataset(PoseDataset):
                 image = back * mask_back + image
             if(self.add_syn_noise):
                 image = image + np.random.normal(loc=0.0, scale=7.0, size=image.shape)
-                image = image.astype(np.uint8) 
+                image = image.astype(np.uint8)
         if(self.IMAGE_CONTAINS_MASK):
             image = np.concatenate([image, mask], 2)
         return image
@@ -196,6 +215,12 @@ class YcbDataset(PoseDataset):
         returned_dict['object_label'] = object_label
 
         sub_path = self.image_list[index][0]
+
+        scene_id = int(sub_path.split("/")[0])
+        im_id = int(sub_path.split("/")[1])
+        returned_dict['im_id'] = im_id
+        returned_dict['scene_id'] = scene_id
+
         path = '{0}/data/{1}-meta.mat'.format(self.dataset_root, sub_path)
         meta = scio.loadmat(path)
 
@@ -226,12 +251,14 @@ class YcbDataset(PoseDataset):
 
             #TODO: figure out how to handle when the valid labels are smaller than minimum size required
             if len(mask.nonzero()[0]) <= self.minimum_num_pts:
-                
-                raise PoseDataError('Mask {} has less than minimum number of pixels ({} < {})'.format(
-                    sub_path, len(mask.nonzero()[0]), self.minimum_num_pts))
+                pass # temperally ignored for BOP testing
+
+                # raise PoseDataError('Mask {} has less than minimum number of pixels ({} < {})'.format(
+                #     sub_path, len(mask.nonzero()[0]), self.minimum_num_pts))
+
                 #while 1:
                     #pass
-            
+
             returned_dict['mask'] = mask
         if bbox:  # needs to return x,y,w,h
             if(not self.use_posecnn_data or self.use_label_bbox or (index >= self.len_real and index < self.len_grid)):
@@ -245,7 +272,7 @@ class YcbDataset(PoseDataset):
                 obj_idx = obj_idx[0]
                 rois = np.array(posecnn_meta['rois'])
                 bbox = self.get_bbox(rois[obj_idx])
-            returned_dict['bbox'] = bbox 
+            returned_dict['bbox'] = bbox
 
         if camera_matrix:
             if self.image_list[index][0][:3] != '../' and int(self.image_list[index][0][:4]) >= 60:
@@ -340,8 +367,8 @@ class YcbDataset(PoseDataset):
             cmin -= delt
         return cmin, rmin, cmax-cmin, rmax-rmin
 
-  
-                 
+
+
 """
 Created on Tue April 29 2019
 
