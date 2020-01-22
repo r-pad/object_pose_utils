@@ -248,7 +248,7 @@ class YcbDataset(PoseDataset):
             returned_dict['bbox'] = bbox 
 
         if camera_matrix:
-            if self.image_list[index][0][:3] != '../' and int(self.image_list[index][0][5:9]) >= 60:
+            if self.image_list[index][0][:3] != '../' and int(self.image_list[index][0][:4]) >= 60:
                 cam_cx = self.cam_cx_2
                 cam_cy = self.cam_cy_2
                 cam_fx = self.cam_fx_2
