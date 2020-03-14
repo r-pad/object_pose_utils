@@ -147,7 +147,8 @@ def processDepthImage(depth, meta_data, output_type,
             np.random.shuffle(c_mask)
             choose = choose[c_mask.nonzero()]
         elif len(choose) > 0:
-            choose = np.pad(choose, (0, num_points - len(choose)), 'wrap')
+            # choose = np.pad(choose, (0, num_points - len(choose)), 'wrap')
+            pass
         else:
             raise PoseDataError('No points in mask')
 
