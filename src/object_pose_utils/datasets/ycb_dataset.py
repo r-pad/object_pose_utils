@@ -27,6 +27,7 @@ class YcbDataset(PoseDataset):
                  add_syn_noise = True,
                  refine = False,
                  use_posecnn_data = False,
+                 mask_with_depth = True,
                  bop_file_path = None,
                  *args, **kwargs):
         super(YcbDataset, self).__init__(*args, **kwargs)
@@ -45,6 +46,7 @@ class YcbDataset(PoseDataset):
         self.add_syn_noise = add_syn_noise
         self.refine = refine
         self.use_posecnn_data = use_posecnn_data
+        self.mask_with_depth = mask_with_depth
         self.classes = ['__background__']
 
         self.cam_cx_1 = 312.9869
@@ -247,7 +249,10 @@ class YcbDataset(PoseDataset):
 
             mask_depth = ma.getmaskarray(ma.masked_not_equal(depth, 0))
             mask_label = ma.getmaskarray(ma.masked_equal(label, self.list_obj[index]))
-            mask = mask_label * mask_depth
+            if(self.mask_with_depth):
+                mask = mask_label * mask_depth
+            else:
+                mask = mask_label
 
             #TODO: figure out how to handle when the valid labels are smaller than minimum size required
             if len(mask.nonzero()[0]) <= self.minimum_num_pts:
