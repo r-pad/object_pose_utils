@@ -260,6 +260,7 @@ class YcbDataset(PoseDataset):
                     #pass
 
             returned_dict['mask'] = mask
+            returned_dict['mask_label'] = mask_label
         if bbox:  # needs to return x,y,w,h
             if(not self.use_posecnn_data or self.use_label_bbox or (index >= self.len_real and index < self.len_grid)):
                 bbox = get_bbox_label(mask_label, image_size = self.image_size)
