@@ -155,7 +155,6 @@ class YcbDataset(PoseDataset):
                     self.image_list.append((image_line, item))
                     self.list_obj.append(item)
 
-
                 image_file.close()
 
         if mode == 'bop_test':

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 Created on a beautiful Sunday
-@author: bokorn 
+@author: bokorn
 """
 import bpy
 
@@ -21,7 +21,7 @@ from tqdm import tqdm
 import argparse
 
 def is_int(s):
-    try: 
+    try:
         int(s)
         return True
     except ValueError:
@@ -37,19 +37,19 @@ def getYCBTransform(q, t=[0,0,.5]):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--output_folder', type=str, help='Data render output location')
-    parser.add_argument('--model_list', type=str, default =  'datasets/ycb/YCB_Video_Dataset', 
+    parser.add_argument('--model_list', type=str, default =  'datasets/ycb/YCB_Video_Dataset',
         help='Dataset root dir (''YCB_Video_Dataset'')')
     parser.add_argument('--models', type=str, nargs='+', help='List of model files or text file containing model file names')
     parser.add_argument('--quats', type=str, default = None, help='\'grid\' for 3885 grid or N for random quaternions')
     parser.add_argument('--name_start_idx', type=int, default = -2, help='Path depth for start of model name')
     parser.add_argument('--name_end_idx', type=int, default = -1, help='Path depth for end of model name')
-     
+
     args = parser.parse_args()
 
     if(len(args.models) == 1 and args.models[0][-4:] == '.txt'):
         with open(args.models[0]) as f:
             args.models = f.readlines()
-        args.models = [x.strip() for x in args.models] 
+        args.models = [x.strip() for x in args.models]
 
     if(args.quats == 'grid'):
         grid = S3Grid(2)
@@ -85,7 +85,7 @@ def main():
 
         pathlib.Path(render_dir).mkdir(parents=True, exist_ok=True)
         filename_template = render_dir + '{:0'+str(digits)+'d}-{}.{}'
-        
+
         for j, q in tqdm(enumerate(quats), total=len(quats)):
             # change if there are different model ids
             obj_label = 1
@@ -97,12 +97,12 @@ def main():
             Image.fromarray(depth.astype(np.int32), "I").save(filename_template.format(j,'depth', 'png'))
             np.save(filename_template.format(j, 'trans', 'npy'), q)
             label = np.where(np.array(img[:,:,-1])==255, obj_label, 0)
-            cv2.imwrite(filename_template.format(j,'label', 'png'), label)	
+            cv2.imwrite(filename_template.format(j,'label', 'png'), label)
             poses = np.zeros([3,4,1])
             poses[:3,:3,0] = quaternion_matrix(q)[:3,:3]
             poses[:3,3,0] = [0.,0.,1.]
-            scio.savemat(filename_template.format(j,'meta', 'mat'), 
-                         {'cls_indexes':np.array([[obj_label]]), 
+            scio.savemat(filename_template.format(j,'meta', 'mat'),
+                         {'cls_indexes':np.array([[obj_label]]),
                           'factor_depth':np.array([[10000]]),
                           'poses':poses})
 
